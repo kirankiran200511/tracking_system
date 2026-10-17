@@ -4,8 +4,7 @@
   "description": "Personal + work spend tracker: voice/text capture, receipts, CSV/PDF import, analytics, budgets, goals and net worth.",
   "private": true,
   "scripts": {
-    "build": "echo 'Build complete'",
-    "start": "node server.js"
+    "start": "node dev-server.js"
   },
   "license": "UNLICENSED"
 }
