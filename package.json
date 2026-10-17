@@ -1,0 +1,10 @@
+{
+  "name": "spendwise",
+  "version": "1.0.0",
+  "description": "Personal + work spend tracker: voice/text capture, receipts, CSV/PDF import, analytics, budgets, goals and net worth.",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "UNLICENSED"
+}
