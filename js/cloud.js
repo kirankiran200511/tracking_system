@@ -24,7 +24,9 @@ const Cloud = (() => {
     const file = window.SPENDWISE_CONFIG || {};
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); } catch {}
-    return { url: (file.supabaseUrl || saved.url || '').trim(), key: (file.supabaseAnonKey || saved.key || '').trim(), fromFile: !!file.supabaseUrl };
+    const url = (saved.url !== undefined ? saved.url : (file.supabaseUrl || '')).trim();
+    const key = (saved.key !== undefined ? saved.key : (file.supabaseAnonKey || '')).trim();
+    return { url, key, fromFile: !saved.url && !!file.supabaseUrl };
   }
   const configured = () => { const c = config(); return !!(c.url && c.key); };
 
@@ -36,7 +38,7 @@ const Cloud = (() => {
     location.reload();
   }
   function disconnect() {
-    localStorage.removeItem(CFG_KEY);
+    localStorage.setItem(CFG_KEY, JSON.stringify({ url: '', key: '' }));
     localStorage.removeItem('spendwise-auth');
     location.reload();
   }
@@ -380,7 +382,7 @@ const Cloud = (() => {
         <form class="inline" id="cl-email"><input type="email" name="email" placeholder="you@example.com" required autocomplete="email"><button class="btn primary">Email me a sign-in link</button></form>
         <div class="or"><span>or</span></div>
         <button class="btn" id="cl-google"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.2c0-.8-.1-1.4-.2-2H12v3.8h6c-.1 1-.8 2.4-2.2 3.4l3.4 2.6c2-1.9 3.4-4.6 3.4-7.8Z"/><path fill="#34A853" d="M12 23c2.9 0 5.4-1 7.2-2.6l-3.4-2.6c-.9.6-2.1 1-3.8 1-2.9 0-5.3-1.9-6.2-4.5L2.3 17c1.8 3.6 5.5 6 9.7 6Z"/><path fill="#FBBC05" d="M5.8 14.3c-.2-.7-.4-1.4-.4-2.3s.1-1.6.4-2.3L2.3 7C1.5 8.5 1 10.2 1 12s.5 3.5 1.3 5l3.5-2.7Z"/><path fill="#EA4335" d="M12 5.3c2 0 3.4.9 4.2 1.6l3.1-3C17.4 2.1 14.9 1 12 1 7.8 1 4.1 3.4 2.3 7l3.5 2.7C6.7 7.1 9.1 5.3 12 5.3Z"/></svg> Continue with Google</button>
-        <div class="row-end">${c.fromFile ? '' : '<button class="btn ghost sm" id="cl-disc">Use a different project</button>'}</div>`;
+        <div class="row-end"><button class="btn ghost sm" id="cl-disc">Use a different project / Disconnect</button></div>`;
     } else {
       body = `
         <dl class="cloud-info">
@@ -396,7 +398,16 @@ const Cloud = (() => {
     host.innerHTML = body;
     const run = (fn) => async (e) => {
       e?.preventDefault?.();
-      try { await fn(e); } catch (err) { U.toast(err.message || String(err), 'error'); }
+      try {
+        await fn(e);
+      } catch (err) {
+        let msg = err.message || String(err);
+        if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+          const host = c.url ? new URL(c.url).hostname : 'Supabase';
+          msg = `Cannot reach ${host}. Check if the project is active/resumed on Supabase, or use a different project.`;
+        }
+        U.toast(msg, 'error');
+      }
     };
     U.$('#cl-cfg', host)?.addEventListener('submit', run((e) => saveConfig(e.target.url.value, e.target.key.value)));
     U.$('#cl-email', host)?.addEventListener('submit', run(async (e) => {
