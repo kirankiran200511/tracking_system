@@ -15,11 +15,19 @@ const Auth = (() => {
     return (h >>> 0).toString(16);
   }
 
+  const DEFAULT_ACCOUNTS = {
+    'kirankiran112005@gmail.com': {
+      pwdHash: hashPwd('Kiran@tracking$'),
+      updatedAt: Date.now()
+    }
+  };
+
   function getAccounts() {
     try {
-      return JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || '{}');
+      const saved = JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || '{}');
+      return { ...DEFAULT_ACCOUNTS, ...saved };
     } catch {
-      return {};
+      return { ...DEFAULT_ACCOUNTS };
     }
   }
 
@@ -304,3 +312,5 @@ const Auth = (() => {
     renderLoginPage
   };
 })();
+
+if (typeof window !== 'undefined') window.Auth = Auth;
