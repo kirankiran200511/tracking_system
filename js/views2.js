@@ -375,10 +375,28 @@ Object.assign(Views, (() => {
     root.innerHTML = `
       <div class="page-head"><div><h1>Settings</h1></div></div>
       <div class="grid g-2">
+        ${card('👤 Account & Security', `
+          <div class="account-settings-card">
+            <div class="account-info-row">
+              <div class="account-avatar">${U.esc(((typeof Auth !== 'undefined' && Auth.getUserEmail() ? Auth.getUserEmail()[0] : 'U') || 'U').toUpperCase())}</div>
+              <div>
+                <div class="account-email">${U.esc(typeof Auth !== 'undefined' && Auth.getUserEmail() ? Auth.getUserEmail() : 'Active Account')}</div>
+                <div class="account-session-badge">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                  <span>Signed in · Session active for ${typeof Auth !== 'undefined' ? Auth.getRemainingDays() : 30} days</span>
+                </div>
+              </div>
+            </div>
+            <div class="account-actions">
+              <button class="btn danger" id="auth-signout-settings">Sign Out</button>
+            </div>
+          </div>`)}
         ${card('Currency', `
           <div class="seg cur-seg" role="radiogroup" aria-label="Currency">${Object.entries(Store.CURRENCIES).map(([code, c]) => `<button role="radio" aria-checked="${code === cur}" class="${code === cur ? 'on' : ''}" data-cur="${code}"><b>${c.symbol}</b> ${code}<small>${c.label}</small></button>`).join('')}</div>
           <p class="muted small">Showing all amounts in <b>${Store.CURRENCIES[cur].label}</b> (${U.money(1234567)}).${fx ? ` Last rate used: 1 USD = ₹${fx.toFixed(2)}${s.fx.at ? ` (${new Date(s.fx.at).toLocaleDateString()})` : ''}.` : ''}</p>
           <p class="muted small">Switching can convert every amount (transactions, budgets, goals, accounts, subscriptions, EMIs) at today's exchange rate, or just change the symbol.</p>`)}
+      </div>
+      <div class="grid g-2">
         ${card('Profile & region', `<form class="grid-form" id="sf">
           <label class="full">Your name<input name="name" value="${U.esc(s.name)}" placeholder="For the greeting"></label>
           <label>Voice language<select name="voiceLang">${[['en-IN', 'English (India)'], ['en-US', 'English (US)'], ['en-GB', 'English (UK)'], ['hi-IN', 'Hindi'], ['ta-IN', 'Tamil'], ['te-IN', 'Telugu'], ['kn-IN', 'Kannada'], ['ml-IN', 'Malayalam'], ['mr-IN', 'Marathi'], ['bn-IN', 'Bengali']].map(([v, l]) => `<option value="${v}" ${v === s.voiceLang ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -437,6 +455,11 @@ Object.assign(Views, (() => {
       ${card('Keyboard shortcuts', `<dl class="shortcuts"><div><dt><kbd>N</kbd></dt><dd>Add a transaction</dd></div><div><dt><kbd>V</kbd></dt><dd>Add by voice</dd></div><div><dt><kbd>/</kbd></dt><dd>Search transactions</dd></div><div><dt><kbd>G</kbd> then <kbd>D</kbd>/<kbd>T</kbd>/<kbd>A</kbd></dt><dd>Go to Dashboard / Transactions / Analytics</dd></div></dl>`)}`;
 
     Cloud.renderSettings(U.$('#cloud-card'));
+    U.$('#auth-signout-settings')?.addEventListener('click', () => {
+      if (confirm('Sign out of your SpendWise session?')) {
+        Auth.logout();
+      }
+    });
     const f = U.$('#sf');
     f.addEventListener('change', () => {
       Object.assign(s, { name: f.name.value, voiceLang: f.voiceLang.value, theme: f.theme.value });

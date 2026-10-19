@@ -20,6 +20,16 @@ const App = (() => {
     Store.load();
     Store.hooks.beforeAdd = Bills.autoLink;
     applyTheme();
+
+    // 30-day authentication gate
+    if (typeof Auth !== 'undefined' && !Auth.isAuthenticated()) {
+      const authRoot = U.$('#auth-root');
+      if (authRoot) {
+        Auth.renderLoginPage(authRoot);
+        return;
+      }
+    }
+
     U.$('#nav').innerHTML = NAV.map(([k, l, p]) => `<a href="#/${k}" data-nav="${k}"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><g fill="currentColor">${p}</g></svg><span>${l}</span></a>`).join('');
     renderFilters();
     Store.on(() => { renderFilters(); route(); });

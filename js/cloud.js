@@ -163,6 +163,28 @@ const Cloud = (() => {
     });
   }
 
+  async function signInPassword(email, password) {
+    if (!sb) {
+      const c = config();
+      if (!c.url || !c.key) throw new Error('Supabase is not configured yet');
+      await init();
+    }
+    if (!sb) throw new Error('Supabase client not initialized');
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data;
+  }
+  async function signUpPassword(email, password) {
+    if (!sb) {
+      const c = config();
+      if (!c.url || !c.key) throw new Error('Supabase is not configured yet');
+      await init();
+    }
+    if (!sb) throw new Error('Supabase client not initialized');
+    const { data, error } = await sb.auth.signUp({ email, password });
+    if (error) throw error;
+    return data;
+  }
   async function signInEmail(email) {
     if (location.protocol === 'file:') throw new Error('Start SpendWise with npm start (http://localhost:5173) to sign in.');
     const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
@@ -175,7 +197,7 @@ const Cloud = (() => {
   }
   async function signOut(wipeLocal) {
     if (user) await sync();
-    await sb.auth.signOut();
+    if (sb) await sb.auth.signOut().catch(() => {});
     if (wipeLocal) { applying = true; Store.reset(); applying = false; localStorage.removeItem(OWNER_KEY); }
   }
 
@@ -428,7 +450,9 @@ const Cloud = (() => {
 
   return {
     init, sync, onChange, pill, renderSettings, configured,
+    signInEmail, signInGoogle, signInPassword, signUpPassword, signOut,
     get status() { return status; },
     get user() { return user; },
+    get sb() { return sb; },
   };
 })();
