@@ -48,6 +48,7 @@ const A = (() => {
       if (f.reimb === 'any' && !t.reimbursable) return false;
       if (f.hasDoc && !t.docIds.length) return false;
       if (f.tag && !t.tags.includes(f.tag)) return false;
+      if (f.tags?.length && !f.tags.some((tag) => t.tags.includes(tag))) return false;
       if (q && !`${t.payee} ${t.category} ${t.note} ${t.tags.join(' ')} ${t.method} ${t.amount}`.toLowerCase().includes(q)) return false;
       return true;
     });

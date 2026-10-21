@@ -92,10 +92,19 @@ const App = (() => {
   function renderFilters() {
     const ui = Store.state.ui;
     const host = U.$('#filters');
+    const tags = Store.allTags();
+    const hasActiveFilter = (ui.workspace && ui.workspace !== 'all') || (ui.range && ui.range !== '30d') || (ui.range === 'custom' && (ui.from || ui.to)) || !!ui.tag;
+
     host.innerHTML = `
       <div class="seg ws" role="radiogroup" aria-label="Workspace">${[['all', 'All'], ['personal', '🙂 Personal'], ['work', '💼 Work']].map(([k, l]) => `<button role="radio" aria-checked="${ui.workspace === k}" class="${ui.workspace === k ? 'on' : ''}" data-ws="${k}">${l}</button>`).join('')}</div>
       <select id="range" class="btn" aria-label="Date range">${A.RANGES.map(([k, l]) => `<option value="${k}" ${k === ui.range ? 'selected' : ''}>${l}</option>`).join('')}</select>
-      ${ui.range === 'custom' ? `<span class="custom-range"><input type="date" id="r-from" value="${ui.from}" aria-label="From"><span>→</span><input type="date" id="r-to" value="${ui.to}" aria-label="To"></span>` : ''}`;
+      ${ui.range === 'custom' ? `<span class="custom-range"><input type="date" id="r-from" value="${ui.from}" aria-label="From"><span>→</span><input type="date" id="r-to" value="${ui.to}" aria-label="To"></span>` : ''}
+      <select id="tag-filter" class="btn filter-tag-select ${ui.tag ? 'has-value' : ''}" aria-label="Filter by tag">
+        <option value="">🏷️ All tags</option>
+        ${tags.map((t) => `<option value="${U.esc(t)}" ${ui.tag === t ? 'selected' : ''}>#${U.esc(t)}</option>`).join('')}
+      </select>
+      ${hasActiveFilter ? `<button class="btn ghost sm filter-clear-btn" id="clear-global-filters" title="Remove active filters">✕ Remove filter</button>` : ''}`;
+
     U.$$('[data-ws]', host).forEach((b) => b.addEventListener('click', () => { ui.workspace = b.dataset.ws; Store.commit(); }));
     U.$('#range').addEventListener('change', (e) => {
       ui.range = e.target.value;
@@ -103,6 +112,19 @@ const App = (() => {
       Store.commit();
     });
     ['from', 'to'].forEach((k) => U.$(`#r-${k}`)?.addEventListener('change', (e) => { ui[k] = e.target.value; if (ui.from > ui.to) [ui.from, ui.to] = [ui.to, ui.from]; Store.commit(); }));
+    U.$('#tag-filter')?.addEventListener('change', (e) => {
+      ui.tag = e.target.value;
+      Store.commit();
+    });
+    U.$('#clear-global-filters')?.addEventListener('click', () => {
+      ui.workspace = 'all';
+      ui.range = '30d';
+      ui.from = '';
+      ui.to = '';
+      ui.tag = '';
+      Store.commit();
+      U.toast('Filters removed', 'info');
+    });
   }
 
   function modal(html, { wide, onClose } = {}) {

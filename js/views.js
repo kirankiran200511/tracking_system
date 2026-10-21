@@ -9,7 +9,7 @@ const Views = (() => {
   };
 
   // Transactions page filter (drill-downs from charts write into this).
-  const txFilter = { search: '', types: [], categories: [], payees: [], methods: [], min: '', max: '', reimb: '', hasDoc: false, tag: '', sort: 'date', dir: -1, limit: 100 };
+  const txFilter = { search: '', types: [], categories: [], payees: [], methods: [], tags: [], min: '', max: '', reimb: '', hasDoc: false, tag: '', sort: 'date', dir: -1, limit: 100 };
   const selected = new Set();
 
   function ctx() {
@@ -17,16 +17,17 @@ const Views = (() => {
     const range = A.resolveRange(st.ui);
     const prevRange = A.previousRange(range);
     const ws = st.ui.workspace;
+    const tag = st.ui.tag || '';
     return {
-      range, prevRange, ws,
-      txns: A.filter(st.txns, { ...range, workspace: ws }),
-      prev: A.filter(st.txns, { ...prevRange, workspace: ws }),
+      range, prevRange, ws, tag,
+      txns: A.filter(st.txns, { ...range, workspace: ws, ...(tag ? { tag } : {}) }),
+      prev: A.filter(st.txns, { ...prevRange, workspace: ws, ...(tag ? { tag } : {}) }),
       label: A.RANGES.find((r) => r[0] === st.ui.range)?.[1] || '',
     };
   }
 
   function drill(patch) {
-    Object.assign(txFilter, { search: '', types: [], categories: [], payees: [], methods: [], min: '', max: '', reimb: '', hasDoc: false, tag: '', month: '', limit: 100 }, patch);
+    Object.assign(txFilter, { search: '', types: [], categories: [], payees: [], methods: [], tags: [], min: '', max: '', reimb: '', hasDoc: false, tag: '', month: '', limit: 100 }, patch);
     selected.clear();
     location.hash = '#/transactions';
   }
@@ -190,14 +191,15 @@ const Views = (() => {
     // a month drill-down (from a monthly chart) overrides the global date range
     const monthEnd = (k) => { const [y, m] = k.split('-').map(Number); return U.iso(new Date(y, m, 0)); };
     const range = txFilter.month ? { from: `${txFilter.month}-01`, to: monthEnd(txFilter.month) } : A.resolveRange(st.ui);
-    const inRange = A.filter(st.txns, { ...range, workspace: st.ui.workspace });
+    const inRange = A.filter(st.txns, { ...range, workspace: st.ui.workspace, ...(st.ui.tag ? { tag: st.ui.tag } : {}) });
     let list = A.filter(inRange, txFilter);
     const key = txFilter.sort, dir = txFilter.dir;
     list = [...list].sort((a, b) => (key === 'amount' ? (a.amount - b.amount) * dir : key === 'payee' ? a.payee.localeCompare(b.payee) * dir : (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) * dir));
     const T = A.totals(list);
     const cats = st.categories.map((c) => c.name);
     const payees = [...new Set(inRange.map((t) => t.payee).filter(Boolean))].sort();
-    const active = txFilter.search || txFilter.types.length || txFilter.categories.length || txFilter.payees.length || txFilter.methods.length || txFilter.min || txFilter.max || txFilter.reimb || txFilter.hasDoc || txFilter.tag || txFilter.month;
+    const allTags = Store.allTags();
+    const active = txFilter.search || txFilter.types.length || txFilter.categories.length || txFilter.payees.length || txFilter.methods.length || (txFilter.tags && txFilter.tags.length) || txFilter.min || txFilter.max || txFilter.reimb || txFilter.hasDoc || txFilter.tag || txFilter.month || !!st.ui.tag;
 
     root.innerHTML = `
       <div class="page-head"><div><h1>Transactions</h1><p class="muted">${list.length} of ${inRange.length} in ${U.fmtDate(range.from)} – ${U.fmtDate(range.to)}</p></div>
@@ -208,6 +210,7 @@ const Views = (() => {
         ${multiSelect('categories', 'Category', cats, txFilter.categories)}
         ${multiSelect('payees', 'Payee', payees, txFilter.payees)}
         ${multiSelect('methods', 'Method', Store.METHODS, txFilter.methods)}
+        ${allTags.length ? multiSelect('tags', 'Tag', allTags, txFilter.tags || (txFilter.tag ? [txFilter.tag] : [])) : ''}
         <details class="ms"><summary class="btn sm">Amount${txFilter.min || txFilter.max ? ' <b class="badge">•</b>' : ''}</summary><div class="ms-pop"><div class="inline"><input id="f-min" type="number" placeholder="Min" value="${txFilter.min}"><input id="f-max" type="number" placeholder="Max" value="${txFilter.max}"></div></div></details>
         <select id="f-reimb" class="btn sm"><option value="">All claims</option><option value="any" ${txFilter.reimb === 'any' ? 'selected' : ''}>Reimbursable</option><option value="pending" ${txFilter.reimb === 'pending' ? 'selected' : ''}>Pending claim</option></select>
         <label class="check sm"><input type="checkbox" id="f-doc" ${txFilter.hasDoc ? 'checked' : ''}> Has doc</label>
@@ -252,7 +255,11 @@ const Views = (() => {
     ['min', 'max'].forEach((k) => U.$(`#f-${k}`).addEventListener('change', (e) => { txFilter[k] = e.target.value; rerender(); }));
     U.$('#f-reimb').addEventListener('change', (e) => { txFilter.reimb = e.target.value; rerender(); });
     U.$('#f-doc').addEventListener('change', (e) => { txFilter.hasDoc = e.target.checked; rerender(); });
-    const clear = () => { drill({}); rerender(); };
+    const clear = () => {
+      drill({});
+      if (st.ui.tag) { st.ui.tag = ''; Store.commit(); }
+      rerender();
+    };
     U.$('#f-clear')?.addEventListener('click', clear);
     U.$('#f-clear2')?.addEventListener('click', clear);
     U.$('#f-month')?.addEventListener('click', () => { txFilter.month = ''; rerender(); });

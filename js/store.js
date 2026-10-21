@@ -69,7 +69,7 @@ const Store = (() => {
     txns: [], budgets: [], goals: [], assets: [], docs: [], rules: [], subscriptions: [], emis: [],
     categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
     settings: { name: '', currency: 'INR', locale: 'en-IN', voiceLang: 'en-IN', theme: 'system' },
-    ui: { workspace: 'all', range: '30d', from: '', to: '' },
+    ui: { workspace: 'all', range: '30d', from: '', to: '', tag: '' },
   });
 
   let state = blank();
@@ -257,10 +257,16 @@ const Store = (() => {
   function reset() { const ui = state.ui; state = blank(); state.ui = ui; commit(); }
   function replace(next) { state = { ...blank(), ...next, ui: state.ui }; commit(); }
 
+  function allTags() {
+    const custom = state.settings.tags || [];
+    const fromTxns = state.txns.flatMap((t) => t.tags || []);
+    return Array.from(new Set([...custom, ...fromTxns])).filter(Boolean).sort();
+  }
+
   return {
     get state() { return state; },
     load, commit, on, cat, catsOf, icon, suggestFor, addTxn, addTxns, updateTxn, deleteTxns, upsert, remove,
     putFile, getFile, addDoc, removeDoc, linkDoc, exportJSON, importJSON, reset, replace, normTxn, hooks,
-    ASSET_KINDS, ASSET_GROUPS, METHODS, CURRENCIES, convertAmounts, setCurrency,
+    ASSET_KINDS, ASSET_GROUPS, METHODS, CURRENCIES, convertAmounts, setCurrency, allTags,
   };
 })();

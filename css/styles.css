@@ -135,6 +135,34 @@ textarea { resize: vertical; }
   border-bottom: 1px solid var(--border);
 }
 .filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.filter-tag-select {
+  max-width: 155px;
+  border-radius: var(--radius-sm);
+  font-weight: 550;
+  padding: 8px 26px 8px 10px;
+}
+.filter-tag-select.has-value {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 650;
+}
+.filter-clear-btn {
+  color: var(--muted);
+  border-radius: var(--radius-sm);
+  padding: 6px 11px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  transition: all var(--transition);
+}
+.filter-clear-btn:hover {
+  color: var(--bad-text);
+  background: rgba(231, 76, 94, 0.08);
+  border-color: rgba(231, 76, 94, 0.25);
+  transform: translateY(-1px);
+}
 .top-actions { margin-left: auto; display: flex; gap: 8px; }
 .custom-range { display: inline-flex; align-items: center; gap: 6px; }
 .custom-range input { width: 145px; padding: 6px 8px; }
