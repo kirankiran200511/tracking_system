@@ -451,11 +451,21 @@ Object.assign(Views, (() => {
           </div>`)}
         ${card('Tags', `
           <div class="settings-section">
-            <p class="muted small">Tags let you add extra labels to transactions (e.g. #trip, #project-x). Manage your tags here.</p>
+            <p class="muted small">Tags let you label transactions across categories and workspaces (e.g. #vacation, #project-x, #tax-deductible). Click ✎ to rename or ✕ to delete.</p>
             <div class="ws-tag-list" id="tag-list">
-              ${s.tags.length ? s.tags.map((t) => `<div class="ws-tag-item"><span>#${U.esc(t)}</span><button class="x" data-del-tag="${U.esc(t)}" aria-label="Remove">✕</button></div>`).join('') : '<span class="muted small">No custom tags yet. Tags are also created when you type them in transactions.</span>'}
+              ${Store.allTags().length ? Store.allTags().map((t) => {
+                const count = st.txns.filter((txn) => txn.tags && txn.tags.includes(t)).length;
+                return `
+                  <div class="ws-tag-item">
+                    <span class="tag-title">#${U.esc(t)}${count ? ` <small class="muted">(${count})</small>` : ''}</span>
+                    <span class="item-actions">
+                      <button type="button" class="action-btn edit" data-edit-tag="${U.esc(t)}" title="Edit / Rename #${U.esc(t)}" aria-label="Edit #${U.esc(t)}">✎</button>
+                      <button type="button" class="action-btn del" data-del-tag="${U.esc(t)}" title="Delete #${U.esc(t)}" aria-label="Delete #${U.esc(t)}">✕</button>
+                    </span>
+                  </div>`;
+              }).join('') : '<span class="muted small">No tags yet. Add one below or select/type tags when adding transactions.</span>'}
             </div>
-            <form class="inline" id="tag-add"><input name="name" placeholder="New tag name" required style="max-width:200px"><button class="btn sm">＋ Add</button></form>
+            <form class="inline" id="tag-add"><input name="name" placeholder="New tag name" required style="max-width:200px"><button class="btn sm primary">＋ Add Tag</button></form>
           </div>`)}
       </div>
       <div class="grid g-2">
@@ -483,8 +493,40 @@ Object.assign(Views, (() => {
         <div></div>
       </div>
       <div class="grid g-2">
-        ${card('Categories', `<ul class="cat-list">${['expense', 'income', 'investment', 'saving'].map((type) => `<li class="cat-group"><h4>${U.cap(type)}</h4><div class="chips">${Store.catsOf(type).map((c) => `<span class="chip">${c.icon} ${U.esc(c.name)}${!used.has(c.name) && c.custom ? ` <button class="x" data-delcat="${U.esc(c.name)}" aria-label="Remove">✕</button>` : ''}</span>`).join('')}</div></li>`).join('')}</ul>
-          <form class="inline" id="cat-add"><input name="icon" placeholder="🙂" maxlength="4" class="xs"><input name="name" placeholder="New category" required><select name="type"><option value="expense">Expense</option><option value="income">Income</option><option value="investment">Investment</option></select><button class="btn">Add</button></form>`)}
+        ${card('Categories', `
+          <p class="muted small">Categories organize your transactions, budgets and insights. Click ✎ to edit name, icon or type, or ✕ to delete.</p>
+          <ul class="cat-list">
+            ${['expense', 'income', 'investment', 'saving'].map((type) => `
+              <li class="cat-group">
+                <h4>${U.cap(type)}</h4>
+                <div class="chips">
+                  ${Store.catsOf(type).map((c) => {
+                    const count = st.txns.filter((txn) => txn.category === c.name).length;
+                    return `
+                      <span class="chip cat-chip-item" data-cat="${U.esc(c.name)}">
+                        <span class="cat-ico-sm">${c.icon}</span>
+                        <span class="cat-name-txt">${U.esc(c.name)}${count ? ` <small class="muted">(${count})</small>` : ''}</span>
+                        <span class="cat-chip-actions">
+                          <button type="button" class="cat-action-btn edit" data-edit-cat="${U.esc(c.name)}" title="Edit category ${U.esc(c.name)}" aria-label="Edit ${U.esc(c.name)}">✎</button>
+                          <button type="button" class="cat-action-btn del" data-del-cat="${U.esc(c.name)}" title="Delete category ${U.esc(c.name)}" aria-label="Delete ${U.esc(c.name)}">✕</button>
+                        </span>
+                      </span>`;
+                  }).join('')}
+                </div>
+              </li>
+            `).join('')}
+          </ul>
+          <form class="inline cat-add-inline" id="cat-add" style="margin-top:14px;">
+            <input name="icon" placeholder="🙂" maxlength="4" class="xs" value="🏷️">
+            <input name="name" placeholder="New category name" required>
+            <select name="type">
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+              <option value="investment">Investment</option>
+              <option value="saving">Saving</option>
+            </select>
+            <button class="btn sm primary">＋ Add Category</button>
+          </form>`)}
         ${card('Auto-categorize rules', `<p class="muted small">When a payee contains the text, SpendWise picks the category and workspace. Rules are learned automatically when you save entries.</p>
           <form class="inline" id="rule-add"><input name="match" placeholder="Payee contains…" required><select name="category">${st.categories.map((c) => `<option>${U.esc(c.name)}</option>`).join('')}</select><select name="workspace"><option value="">Any</option><option value="personal">Personal</option><option value="work">Work</option></select><button class="btn">Add</button></form>
           <div class="table-wrap tall"><table class="data-table"><tbody>${st.rules.slice().reverse().map((r) => `<tr><td>"${U.esc(r.match)}"</td><td>→ ${Store.icon(r.category)} ${U.esc(r.category)}</td><td class="muted">${r.workspace || ''}${r.auto ? ' · learned' : ''}</td><td><button class="icon-btn" data-delrule="${r.id}" aria-label="Delete rule">✕</button></td></tr>`).join('') || '<tr><td class="muted">No rules yet.</td></tr>'}</tbody></table></div>`)}
@@ -515,16 +557,49 @@ Object.assign(Views, (() => {
     U.$('#s-csv').addEventListener('click', () => { const head = ['date', 'type', 'amount', 'payee', 'category', 'workspace', 'method', 'note']; U.download(`spendwise-all-${U.todayISO()}.csv`, [head.join(','), ...st.txns.map((t) => head.map((h) => `"${String(t[h] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n'), 'text/csv'); });
     U.$('#s-sample').addEventListener('click', () => App.loadSample());
     U.$('#s-wipe').addEventListener('click', () => { if (confirm('Erase ALL transactions, budgets, goals, accounts and documents? This cannot be undone.') && confirm('Really erase everything?')) { Store.reset(); U.toast('All data erased'); } });
-    U.$('#cat-add').addEventListener('submit', (e) => {
+
+    // Category management
+    U.$('#cat-add')?.addEventListener('submit', (e) => {
       e.preventDefault();
       const n = e.target.name.value.trim();
+      const icon = e.target.icon.value.trim() || '•';
+      const type = e.target.type.value;
       if (Store.cat(n)) return U.toast('That category exists', 'error');
-      st.categories.push({ name: n, type: e.target.type.value, icon: e.target.icon.value || '•', custom: true });
-      Store.commit();
+      const ok = Store.addCategory({ name: n, type, icon });
+      if (!ok) return U.toast('Could not create category', 'error');
+      U.toast(`Category "${n}" created`, 'success');
+      settings(root);
     });
-    U.$$('[data-delcat]').forEach((b) => b.addEventListener('click', () => { st.categories = st.categories.filter((c) => c.name !== b.dataset.delcat); Store.commit(); }));
-    U.$('#rule-add').addEventListener('submit', (e) => { e.preventDefault(); st.rules.push({ id: U.uid(), match: e.target.match.value.trim(), category: e.target.category.value, workspace: e.target.workspace.value || null }); Store.commit(); });
+
+    U.$$('[data-edit-cat]', root).forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      editCategoryModal(b.dataset.editCat, () => settings(root));
+    }));
+
+    U.$$('[data-del-cat]', root).forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const catName = b.dataset.delCat;
+      const c = Store.cat(catName);
+      if (!c) return;
+      const count = st.txns.filter((t) => t.category === catName).length;
+      let fallback = 'Other';
+      if (c.type === 'income') fallback = 'Other Income';
+      else if (c.type === 'investment') fallback = 'Mutual Funds';
+      else if (c.type === 'saving') fallback = 'Savings';
+
+      const msg = count
+        ? `Delete category "${catName}"?\n\nIt is currently used in ${count} transaction(s). Deleting will reassign those transactions to "${fallback}".`
+        : `Delete category "${catName}"?`;
+      if (confirm(msg)) {
+        Store.deleteCategory(catName, fallback);
+        U.toast(`Category "${catName}" deleted`, 'info');
+        settings(root);
+      }
+    }));
+
+    U.$('#rule-add')?.addEventListener('submit', (e) => { e.preventDefault(); st.rules.push({ id: U.uid(), match: e.target.match.value.trim(), category: e.target.category.value, workspace: e.target.workspace.value || null }); Store.commit(); });
     U.$$('[data-delrule]').forEach((b) => b.addEventListener('click', () => Store.remove('rules', b.dataset.delrule)));
+
     // Workspace management
     U.$('#ws-add')?.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -532,22 +607,41 @@ Object.assign(Views, (() => {
       if (!n || s.workspaces.includes(n)) return U.toast('Workspace already exists', 'error');
       s.workspaces.push(n);
       Store.commit();
+      settings(root);
     });
     U.$$('[data-del-ws]').forEach((b) => b.addEventListener('click', () => {
       s.workspaces = s.workspaces.filter((w) => w !== b.dataset.delWs);
       Store.commit();
+      settings(root);
     }));
+
     // Tag management
     U.$('#tag-add')?.addEventListener('submit', (e) => {
       e.preventDefault();
-      const n = e.target.name.value.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
-      if (!n || s.tags.includes(n)) return U.toast('Tag already exists', 'error');
-      s.tags.push(n);
-      Store.commit();
+      const raw = e.target.name.value.trim();
+      const ok = Store.addTag(raw);
+      if (!ok) return U.toast('Tag already exists or invalid', 'error');
+      U.toast('Tag added', 'success');
+      settings(root);
     });
-    U.$$('[data-del-tag]').forEach((b) => b.addEventListener('click', () => {
-      s.tags = s.tags.filter((t) => t !== b.dataset.delTag);
-      Store.commit();
+
+    U.$$('[data-edit-tag]', root).forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      editTagModal(b.dataset.editTag, () => settings(root));
+    }));
+
+    U.$$('[data-del-tag]', root).forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tag = b.dataset.delTag;
+      const count = st.txns.filter((t) => (t.tags || []).includes(tag)).length;
+      const msg = count
+        ? `Delete tag #${tag}?\n\nIt is used on ${count} transaction(s). Deleting it will remove this tag from those transactions.`
+        : `Delete tag #${tag}?`;
+      if (confirm(msg)) {
+        Store.deleteTag(tag);
+        U.toast(`Tag #${tag} deleted`, 'info');
+        settings(root);
+      }
     }));
     // Column visibility management
     U.$$('[data-col]').forEach((cb) => cb.addEventListener('change', () => {
@@ -637,6 +731,79 @@ Object.assign(Views, (() => {
         btn.disabled = false;
         btn.textContent = directReset ? 'Reset Password' : 'Update Password';
       }
+    });
+  }
+
+  function editTagModal(tag, onDone) {
+    const count = Store.state.txns.filter((t) => (t.tags || []).includes(tag)).length;
+    App.modal(`
+      <div class="modal-head"><h2>Edit Tag</h2><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+      <form id="tag-edit-form" class="stack-form">
+        <label class="stack">Tag Name
+          <div class="inline"><span class="nowrap" style="font-weight:700; color:var(--accent); font-size:16px;">#</span><input name="name" value="${U.esc(tag)}" required autofocus></div>
+        </label>
+        ${count ? `<p class="muted small">ℹ️ Tag <b>#${U.esc(tag)}</b> is currently used on <b>${count}</b> transaction(s). Renaming will update all of them.</p>` : ''}
+        <div class="row-end">
+          <button type="button" class="btn" data-close>Cancel</button>
+          <button class="btn primary" type="submit">Save Changes</button>
+        </div>
+      </form>
+    `);
+    U.$('#tag-edit-form')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const newName = e.target.name.value.trim().toLowerCase().replace(/^#/, '').replace(/[^a-z0-9-_]/g, '-');
+      if (!newName) return U.toast('Please enter a tag name', 'error');
+      if (newName === tag) { App.closeModal(); return; }
+      Store.renameTag(tag, newName);
+      App.closeModal();
+      U.toast(`Tag renamed to #${newName}`, 'success');
+      onDone?.();
+    });
+  }
+
+  function editCategoryModal(catName, onDone) {
+    const c = Store.cat(catName);
+    if (!c) return;
+    const count = Store.state.txns.filter((t) => t.category === catName).length;
+    App.modal(`
+      <div class="modal-head"><h2>Edit Category: ${c.icon} ${U.esc(c.name)}</h2><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+      <form id="cat-edit-form" class="stack-form">
+        <label class="stack">Category Name
+          <input name="name" value="${U.esc(c.name)}" required autofocus>
+        </label>
+        <label class="stack">Icon / Emoji
+          <div class="inline">
+            <input name="icon" value="${U.esc(c.icon || '🏷️')}" maxlength="4" class="xs" style="font-size:20px; width:64px; text-align:center;">
+            <span class="muted small">Type or paste any emoji</span>
+          </div>
+        </label>
+        <label class="stack">Category Type
+          <select name="type">
+            <option value="expense" ${c.type === 'expense' ? 'selected' : ''}>Expense</option>
+            <option value="income" ${c.type === 'income' ? 'selected' : ''}>Income</option>
+            <option value="investment" ${c.type === 'investment' ? 'selected' : ''}>Investment</option>
+            <option value="saving" ${c.type === 'saving' ? 'selected' : ''}>Saving</option>
+          </select>
+        </label>
+        ${count ? `<p class="muted small">ℹ️ This category is used in <b>${count}</b> transaction(s). Updating will update all of them.</p>` : ''}
+        <div class="row-end">
+          <button type="button" class="btn" data-close>Cancel</button>
+          <button class="btn primary" type="submit">Save Changes</button>
+        </div>
+      </form>
+    `);
+    U.$('#cat-edit-form')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const newName = fd.get('name').trim();
+      const newIcon = fd.get('icon').trim() || '•';
+      const newType = fd.get('type');
+      if (!newName) return U.toast('Please enter a category name', 'error');
+      if (newName !== c.name && Store.cat(newName)) return U.toast('A category with that name already exists', 'error');
+      Store.updateCategory(c.name, { name: newName, icon: newIcon, type: newType });
+      App.closeModal();
+      U.toast(`Category "${newName}" updated`, 'success');
+      onDone?.();
     });
   }
 

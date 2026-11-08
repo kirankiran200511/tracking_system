@@ -120,6 +120,8 @@ const Capture = (() => {
 
   function txnForm(t = {}) {
     const type = t.type || 'expense';
+    const allTags = Store.allTags();
+    const curTags = Array.isArray(t.tags) ? t.tags : (t.tags ? String(t.tags).split(',').map((s) => s.trim().replace(/^#/, '')).filter(Boolean) : []);
     return `
       <form class="grid-form" id="txn-form" autocomplete="off">
         <div class="seg full" role="radiogroup" aria-label="Type">${TYPES.map(([v, l]) => `<label><input type="radio" name="type" value="${v}" ${v === type ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
@@ -130,7 +132,23 @@ const Capture = (() => {
         <label>Workspace<select name="workspace">${opts([['personal', 'Personal'], ['work', 'Work']], t.workspace || 'personal')}</select></label>
         <label>Payment method<select name="method">${Store.METHODS.map((m) => `<option ${m === (t.method || 'UPI') ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
         <label class="full">Note<input name="note" value="${U.esc(t.note || '')}" placeholder="Optional"></label>
-        <label>Tags<input name="tags" value="${U.esc((t.tags || []).join(', '))}" placeholder="trip-goa, gifts"></label>
+        <div class="full form-tags-box">
+          <div class="form-tags-head">
+            <span>Tags</span>
+            <span class="muted small">${allTags.length ? 'Click to select tags' : 'Type below to create tags'}</span>
+          </div>
+          ${allTags.length ? `
+          <div class="form-tag-chips" id="form-tag-chips">
+            ${allTags.map((tag) => `
+              <button type="button" class="tag-select-chip ${curTags.includes(tag) ? 'active' : ''}" data-tag="${U.esc(tag)}">
+                <span class="hash">#</span>${U.esc(tag)}
+              </button>
+            `).join('')}
+          </div>` : ''}
+          <div class="form-tag-input-wrap">
+            <input name="tags" id="txn-tags-input" value="${U.esc(curTags.join(', '))}" placeholder="${allTags.length ? 'Selected tags (or type new ones separated by commas)' : 'Type tags separated by commas, e.g. vacation, gifts'}">
+          </div>
+        </div>
         <div class="checks">
           <label class="check"><input type="checkbox" name="reimbursable" ${t.reimbursable ? 'checked' : ''}> Reimbursable</label>
           <label class="check"><input type="checkbox" name="reimbursed" ${t.reimbursed ? 'checked' : ''}> Reimbursed</label>
@@ -158,9 +176,39 @@ const Capture = (() => {
       if (s?.category && Store.cat(s.category)?.type === type) f.category.value = s.category;
       if (s?.workspace) f.workspace.value = s.workspace;
     });
+
+    // Interactive tag selection
+    const tagInput = U.$('#txn-tags-input', f);
+    const chipsContainer = U.$('#form-tag-chips', f);
+    if (tagInput && chipsContainer) {
+      chipsContainer.querySelectorAll('.tag-select-chip').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          btn.classList.toggle('active');
+          const activeTags = Array.from(chipsContainer.querySelectorAll('.tag-select-chip.active')).map((b) => b.dataset.tag);
+          const typedTags = tagInput.value.split(',').map((s) => s.trim().replace(/^#/, '')).filter(Boolean);
+          const chipTagsSet = new Set(Array.from(chipsContainer.querySelectorAll('.tag-select-chip')).map((b) => b.dataset.tag));
+          const extraCustom = typedTags.filter((t) => !chipTagsSet.has(t));
+          const allSelected = [...new Set([...activeTags, ...extraCustom])];
+          tagInput.value = allSelected.join(', ');
+        });
+      });
+
+      tagInput.addEventListener('input', () => {
+        const typedTags = new Set(tagInput.value.split(',').map((s) => s.trim().replace(/^#/, '')).filter(Boolean));
+        chipsContainer.querySelectorAll('.tag-select-chip').forEach((btn) => {
+          btn.classList.toggle('active', typedTags.has(btn.dataset.tag));
+        });
+      });
+    }
+
     f.addEventListener('submit', (e) => {
       e.preventDefault();
       const fd = new FormData(f);
+      // Auto-register any new tags created in settings
+      const tagStr = fd.get('tags') || '';
+      const tagsList = tagStr.split(',').map((s) => s.trim().replace(/^#/, '').toLowerCase().replace(/[^a-z0-9-_]/g, '-')).filter(Boolean);
+      tagsList.forEach((tg) => Store.addTag(tg));
+
       onSubmit({
         type: fd.get('type'), amount: Number(fd.get('amount')), date: fd.get('date'), payee: fd.get('payee'), category: fd.get('category'),
         workspace: fd.get('workspace'), method: fd.get('method'), note: fd.get('note'), tags: fd.get('tags'),

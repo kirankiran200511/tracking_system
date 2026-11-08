@@ -265,10 +265,124 @@ const Store = (() => {
     return Array.from(new Set([...custom, ...fromTxns])).filter(Boolean).sort();
   }
 
+  function addTag(tag) {
+    const t = String(tag || '').trim().toLowerCase().replace(/^#/, '').replace(/[^a-z0-9-_]/g, '-');
+    if (!t) return false;
+    if (!state.settings.tags) state.settings.tags = [];
+    if (!state.settings.tags.includes(t)) {
+      state.settings.tags.push(t);
+      commit();
+    }
+    return true;
+  }
+
+  function renameTag(oldTag, newTag) {
+    const oldT = String(oldTag || '').trim().toLowerCase().replace(/^#/, '');
+    const newT = String(newTag || '').trim().toLowerCase().replace(/^#/, '').replace(/[^a-z0-9-_]/g, '-');
+    if (!oldT || !newT || oldT === newT) return false;
+    if (!state.settings.tags) state.settings.tags = [];
+    state.settings.tags = state.settings.tags.map((t) => (t === oldT ? newT : t));
+    if (!state.settings.tags.includes(newT)) state.settings.tags.push(newT);
+    state.settings.tags = [...new Set(state.settings.tags)];
+    state.txns.forEach((t) => {
+      if (t.tags && t.tags.includes(oldT)) {
+        t.tags = [...new Set(t.tags.map((x) => (x === oldT ? newT : x)))];
+      }
+    });
+    if (state.ui.tag === oldT) state.ui.tag = newT;
+    commit();
+    return true;
+  }
+
+  function deleteTag(tag) {
+    const t = String(tag || '').trim().toLowerCase().replace(/^#/, '');
+    if (!t) return false;
+    if (state.settings.tags) {
+      state.settings.tags = state.settings.tags.filter((x) => x !== t);
+    }
+    state.txns.forEach((txn) => {
+      if (txn.tags && txn.tags.includes(t)) {
+        txn.tags = txn.tags.filter((x) => x !== t);
+      }
+    });
+    if (state.ui.tag === t) state.ui.tag = '';
+    commit();
+    return true;
+  }
+
+  function addCategory({ name, type = 'expense', icon = '•' }) {
+    const n = String(name || '').trim();
+    if (!n || cat(n)) return false;
+    state.categories.push({ name: n, type, icon: icon || '•', custom: true });
+    commit();
+    return true;
+  }
+
+  function updateCategory(oldName, { name, type, icon }) {
+    const c = cat(oldName);
+    if (!c) return false;
+    const newName = String(name || '').trim();
+    if (!newName) return false;
+    if (newName !== oldName && cat(newName)) return false;
+
+    c.name = newName;
+    if (type) c.type = type;
+    if (icon) c.icon = icon;
+
+    if (newName !== oldName || type) {
+      state.txns.forEach((t) => {
+        if (t.category === oldName) {
+          t.category = newName;
+          if (type && t.type !== type) t.type = type;
+        }
+      });
+      state.budgets.forEach((b) => {
+        if (b.category === oldName) b.category = newName;
+      });
+      state.rules.forEach((r) => {
+        if (r.category === oldName) r.category = newName;
+      });
+      state.subscriptions.forEach((s) => {
+        if (s.category === oldName) s.category = newName;
+      });
+      state.emis.forEach((e) => {
+        if (e.category === oldName) e.category = newName;
+      });
+    }
+    commit();
+    return true;
+  }
+
+  function deleteCategory(name, fallback = 'Other') {
+    const c = cat(name);
+    if (!c) return false;
+
+    if (!cat(fallback) && name !== fallback) {
+      state.categories.push({ name: fallback, type: c.type || 'expense', icon: '•', custom: true });
+    }
+
+    state.categories = state.categories.filter((x) => x.name !== name);
+    state.txns.forEach((t) => {
+      if (t.category === name) t.category = fallback;
+    });
+    state.budgets = state.budgets.filter((b) => b.category !== name);
+    state.rules = state.rules.filter((r) => r.category !== name);
+    state.subscriptions.forEach((s) => {
+      if (s.category === name) s.category = fallback;
+    });
+    state.emis.forEach((e) => {
+      if (e.category === name) e.category = fallback;
+    });
+
+    commit();
+    return true;
+  }
+
   return {
     get state() { return state; },
     load, commit, on, cat, catsOf, icon, suggestFor, addTxn, addTxns, updateTxn, deleteTxns, upsert, remove,
     putFile, getFile, addDoc, removeDoc, linkDoc, exportJSON, importJSON, reset, replace, normTxn, hooks,
     ASSET_KINDS, ASSET_GROUPS, METHODS, CURRENCIES, convertAmounts, setCurrency, allTags,
+    addTag, renameTag, deleteTag, addCategory, updateCategory, deleteCategory,
   };
 })();
