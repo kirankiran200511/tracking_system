@@ -32,13 +32,14 @@ const Auth = (() => {
   }
 
   function saveAccount(email, password) {
-    const accs = getAccounts();
-    accs[email.toLowerCase().trim()] = {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || '{}'); } catch { saved = {}; }
+    saved[email.toLowerCase().trim()] = {
       pwdHash: hashPwd(password),
       updatedAt: Date.now()
     };
     try {
-      localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accs));
+      localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(saved));
     } catch (e) {
       console.warn('Could not save local account', e);
     }
@@ -86,7 +87,11 @@ const Auth = (() => {
 
   function getUserEmail() {
     const s = getSession();
-    return s ? s.email : '';
+    if (s && s.email) return s.email;
+    if (typeof Cloud !== 'undefined' && Cloud.user && Cloud.user.email) return Cloud.user.email;
+    const accs = getAccounts();
+    const emails = Object.keys(accs);
+    return emails[0] || 'kirankiran112005@gmail.com';
   }
 
   function getRemainingDays() {
@@ -180,9 +185,13 @@ const Auth = (() => {
   }
 
   function renderLoginPage(container) {
-    let mode = 'signin'; // 'signin' or 'signup'
+    let mode = 'signin'; // 'signin', 'signup', or 'reset'
 
     function render() {
+      const isReset = mode === 'reset';
+      const isSignup = mode === 'signup';
+      const isSignin = mode === 'signin';
+
       container.innerHTML = `
         <div class="auth-wrapper">
           <div class="auth-card">
@@ -200,12 +209,13 @@ const Auth = (() => {
                 </svg>
               </div>
               <h1 class="auth-title">SpendWise</h1>
-              <p class="auth-subtitle">${mode === 'signin' ? 'Sign in to access your finances' : 'Create an account to start tracking'}</p>
+              <p class="auth-subtitle">${isReset ? 'Set a new password for your account' : isSignup ? 'Create an account to start tracking' : 'Sign in to access your finances'}</p>
             </div>
 
             <div class="auth-tabs" role="tablist">
-              <button type="button" class="auth-tab ${mode === 'signin' ? 'active' : ''}" id="tab-signin">Sign In</button>
-              <button type="button" class="auth-tab ${mode === 'signup' ? 'active' : ''}" id="tab-signup">Create Account</button>
+              <button type="button" class="auth-tab ${isSignin ? 'active' : ''}" id="tab-signin">Sign In</button>
+              <button type="button" class="auth-tab ${isSignup ? 'active' : ''}" id="tab-signup">Create Account</button>
+              <button type="button" class="auth-tab ${isReset ? 'active' : ''}" id="tab-reset">Reset</button>
             </div>
 
             <div id="auth-alert" class="auth-alert" style="display:none;"></div>
@@ -215,31 +225,47 @@ const Auth = (() => {
                 <label for="auth-email">Email address</label>
                 <div class="input-icon-wrap">
                   <svg class="field-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                  <input type="email" id="auth-email" name="email" placeholder="you@example.com" required autocomplete="email" autofocus>
+                  <input type="email" id="auth-email" name="email" placeholder="you@example.com" value="${U.esc(getUserEmail() || '')}" required autocomplete="email" autofocus>
                 </div>
               </div>
 
               <div class="auth-field">
-                <label for="auth-password">Password</label>
+                <label for="auth-password">${isReset ? 'New password' : 'Password'}</label>
                 <div class="input-icon-wrap">
                   <svg class="field-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  <input type="password" id="auth-password" name="password" placeholder="••••••••" required autocomplete="${mode === 'signin' ? 'current-password' : 'new-password'}">
+                  <input type="password" id="auth-password" name="password" placeholder="••••••••" required minlength="${isReset || isSignup ? '6' : '1'}" autocomplete="${isSignin ? 'current-password' : 'new-password'}">
                   <button type="button" class="pwd-toggle" id="pwd-toggle" aria-label="Toggle password visibility">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                   </button>
                 </div>
+                ${isSignin ? `<div style="display:flex; justify-content:flex-end; margin-top:5px;"><button type="button" id="link-forgot-pwd" style="background:none; border:none; padding:0; color:var(--muted); font-size:12px; cursor:pointer; text-decoration:underline;">Forgot password?</button></div>` : ''}
               </div>
 
+              ${isReset ? `
+              <div class="auth-field">
+                <label for="auth-confirm">Confirm new password</label>
+                <div class="input-icon-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <input type="password" id="auth-confirm" name="confirm" placeholder="••••••••" required minlength="6" autocomplete="new-password">
+                </div>
+              </div>` : ''}
+
+              ${!isReset ? `
               <div class="auth-options">
                 <label class="remember-label">
                   <input type="checkbox" id="auth-remember" checked>
                   <span>Stay signed in for <b>30 days</b></span>
                 </label>
-              </div>
+              </div>` : ''}
 
               <button type="submit" class="btn primary auth-submit" id="auth-submit-btn">
-                <span>${mode === 'signin' ? 'Sign In' : 'Create Account'}</span>
+                <span>${isReset ? 'Set New Password & Sign In' : isSignup ? 'Create Account' : 'Sign In'}</span>
               </button>
+
+              ${isReset ? `
+              <div style="text-align:center; margin-top:8px;">
+                <button type="button" id="back-to-signin" style="background:none; border:none; color:var(--accent); font-size:13px; cursor:pointer;">← Back to Sign In</button>
+              </div>` : ''}
             </form>
 
             <div class="auth-footer">
@@ -253,14 +279,15 @@ const Auth = (() => {
       `;
 
       // Event listeners
-      const tabSignIn = container.querySelector('#tab-signin');
-      const tabSignUp = container.querySelector('#tab-signup');
-      tabSignIn.addEventListener('click', () => { mode = 'signin'; render(); });
-      tabSignUp.addEventListener('click', () => { mode = 'signup'; render(); });
+      container.querySelector('#tab-signin')?.addEventListener('click', () => { mode = 'signin'; render(); });
+      container.querySelector('#tab-signup')?.addEventListener('click', () => { mode = 'signup'; render(); });
+      container.querySelector('#tab-reset')?.addEventListener('click', () => { mode = 'reset'; render(); });
+      container.querySelector('#link-forgot-pwd')?.addEventListener('click', () => { mode = 'reset'; render(); });
+      container.querySelector('#back-to-signin')?.addEventListener('click', () => { mode = 'signin'; render(); });
 
       const pwdToggle = container.querySelector('#pwd-toggle');
       const pwdInput = container.querySelector('#auth-password');
-      pwdToggle.addEventListener('click', () => {
+      pwdToggle?.addEventListener('click', () => {
         const isPwd = pwdInput.type === 'password';
         pwdInput.type = isPwd ? 'text' : 'password';
         pwdToggle.classList.toggle('active', isPwd);
@@ -275,7 +302,21 @@ const Auth = (() => {
         alertBox.style.display = 'none';
         const email = form.email.value.trim();
         const pwd = form.password.value;
-        const remember = form.querySelector('#auth-remember').checked;
+        const remember = form.querySelector('#auth-remember') ? form.querySelector('#auth-remember').checked : true;
+
+        if (mode === 'reset') {
+          const confirm = form.confirm.value;
+          if (pwd !== confirm) {
+            alertBox.textContent = 'New passwords do not match.';
+            alertBox.style.display = 'block';
+            return;
+          }
+          if (pwd.length < 6) {
+            alertBox.textContent = 'Password must be at least 6 characters.';
+            alertBox.style.display = 'block';
+            return;
+          }
+        }
 
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span>Verifying…</span>';
@@ -283,8 +324,10 @@ const Auth = (() => {
         try {
           if (mode === 'signin') {
             await login(email, pwd, remember);
-          } else {
+          } else if (mode === 'signup') {
             await signup(email, pwd, remember);
+          } else if (mode === 'reset') {
+            await resetPassword(email, pwd);
           }
           // Successfully authenticated!
           location.reload();
@@ -292,12 +335,64 @@ const Auth = (() => {
           alertBox.textContent = err.message || 'Authentication failed. Please try again.';
           alertBox.style.display = 'block';
           submitBtn.disabled = false;
-          submitBtn.innerHTML = `<span>${mode === 'signin' ? 'Sign In' : 'Create Account'}</span>`;
+          submitBtn.innerHTML = `<span>${mode === 'reset' ? 'Set New Password & Sign In' : mode === 'signin' ? 'Sign In' : 'Create Account'}</span>`;
         }
       });
     }
 
     render();
+  }
+
+  async function resetPassword(email, newPassword) {
+    email = (email || getUserEmail() || '').trim().toLowerCase();
+    if (!email) throw new Error('Email is required.');
+    if (!newPassword || newPassword.length < 6) throw new Error('New password must be at least 6 characters.');
+
+    saveAccount(email, newPassword);
+    setSession(email, true);
+
+    if (typeof Cloud !== 'undefined' && Cloud.configured && Cloud.configured() && Cloud.updatePassword) {
+      try {
+        await Cloud.updatePassword(newPassword);
+      } catch (err) {
+        console.warn('Supabase password update error:', err);
+      }
+    }
+    return { success: true };
+  }
+
+  async function changePassword(currentPassword, newPassword, bypassCurrentCheck = false) {
+    const email = (getUserEmail() || '').trim().toLowerCase();
+    if (!email) throw new Error('You must be signed in to change your password.');
+    if (!newPassword) throw new Error('Please enter a new password.');
+    if (newPassword.length < 6) throw new Error('New password must be at least 6 characters.');
+
+    if (!bypassCurrentCheck) {
+      if (!currentPassword) throw new Error('Please enter your current password, or click "Reset directly".');
+      if (currentPassword === newPassword) throw new Error('New password must be different from current password.');
+
+      // Verify current password against local accounts (includes defaults)
+      const accs = getAccounts();
+      const acc = accs[email];
+      if (acc && acc.pwdHash !== hashPwd(currentPassword)) {
+        throw new Error('Current password is incorrect. Click "Reset directly" if you forgot it.');
+      }
+    }
+
+    // Save updated password
+    saveAccount(email, newPassword);
+    setSession(email, true);
+
+    // Update in Supabase if configured
+    if (typeof Cloud !== 'undefined' && Cloud.configured && Cloud.configured() && Cloud.updatePassword) {
+      try {
+        await Cloud.updatePassword(newPassword);
+      } catch (err) {
+        console.warn('Supabase password update error:', err);
+      }
+    }
+
+    return { success: true };
   }
 
   return {
@@ -309,7 +404,9 @@ const Auth = (() => {
     signup,
     logout,
     registerCredentials,
-    renderLoginPage
+    renderLoginPage,
+    changePassword,
+    resetPassword
   };
 })();
 

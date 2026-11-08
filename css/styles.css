@@ -388,7 +388,9 @@ th.sortable:hover { color: var(--ink); }
 .cell-actions { display: flex; gap: 4px; justify-content: flex-end; align-items: center; }
 .data-table td.num, .delta { white-space: nowrap; }
 .c-payee b { font-weight: 600; }
-.c-tags { white-space: nowrap; }
+.c-tags { white-space: normal; min-width: 120px; }
+.cat-label { display: block; font-weight: 600; font-size: 13px; color: var(--ink); margin-bottom: 2px; }
+.tag-pills { display: flex; flex-wrap: wrap; gap: 3px; }
 .c-method { white-space: nowrap; }
 .c-amt { font-weight: 700; white-space: nowrap; }
 .c-amt.income { color: var(--good-text); }
@@ -425,6 +427,13 @@ th.sortable:hover { color: var(--ink); }
 .bulk.show { display: flex; }
 .bulk select { width: auto; padding: 5px 8px; }
 .notice { padding: 10px 14px; background: var(--accent-soft); border-radius: 12px; margin-bottom: 12px; font-size: 13px; }
+
+/* Transaction view font */
+.txn-table, .filterbar, .sum-strip, .bulk {
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.txn-table td { font-size: 13.5px; letter-spacing: -0.01em; }
+.txn-table th { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; letter-spacing: 0.06em; }
 
 .subtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px; overflow-x: auto; scrollbar-width: none; }
 .subtabs a { padding: 11px 16px; color: var(--ink-2); font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; transition: all var(--transition); }
@@ -1025,4 +1034,6 @@ label.choice:has(input:checked) { border-color: var(--accent); background: var(-
   padding: 12px 14px;
   border-top: 1px solid var(--border);
 }
+.account-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.pwd-error { width: 100%; padding: 10px 14px; background: color-mix(in srgb, var(--bad-text) 12%, transparent); color: var(--bad-text); border-radius: 10px; font-size: 13px; font-weight: 500; }
 

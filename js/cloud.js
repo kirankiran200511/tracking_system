@@ -195,6 +195,17 @@ const Cloud = (() => {
     const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } });
     if (error) throw error;
   }
+  async function updatePassword(newPassword) {
+    if (!sb) return;
+    try {
+      const { data, error } = await sb.auth.updateUser({ password: newPassword });
+      if (error) console.warn('Supabase updateUser error:', error);
+      return data;
+    } catch (e) {
+      console.warn('Supabase updateUser exception:', e);
+    }
+  }
+
   async function signOut(wipeLocal) {
     if (user) await sync();
     if (sb) await sb.auth.signOut().catch(() => {});
@@ -450,7 +461,7 @@ const Cloud = (() => {
 
   return {
     init, sync, onChange, pill, renderSettings, configured,
-    signInEmail, signInGoogle, signInPassword, signUpPassword, signOut,
+    signInEmail, signInGoogle, signInPassword, signUpPassword, signOut, updatePassword,
     get status() { return status; },
     get user() { return user; },
     get sb() { return sb; },

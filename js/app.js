@@ -96,7 +96,7 @@ const App = (() => {
     const hasActiveFilter = (ui.workspace && ui.workspace !== 'all') || (ui.range && ui.range !== '30d') || (ui.range === 'custom' && (ui.from || ui.to)) || !!ui.tag;
 
     host.innerHTML = `
-      <div class="seg ws" role="radiogroup" aria-label="Workspace">${[['all', 'All'], ['personal', '🙂 Personal'], ['work', '💼 Work']].map(([k, l]) => `<button role="radio" aria-checked="${ui.workspace === k}" class="${ui.workspace === k ? 'on' : ''}" data-ws="${k}">${l}</button>`).join('')}</div>
+      <div class="seg ws" role="radiogroup" aria-label="Workspace">${[['all', 'All'], ['personal', 'Personal'], ['work', 'Work']].map(([k, l]) => `<button role="radio" aria-checked="${ui.workspace === k}" class="${ui.workspace === k ? 'on' : ''}" data-ws="${k}">${l}</button>`).join('')}</div>
       <select id="range" class="btn" aria-label="Date range">${A.RANGES.map(([k, l]) => `<option value="${k}" ${k === ui.range ? 'selected' : ''}>${l}</option>`).join('')}</select>
       ${ui.range === 'custom' ? `<span class="custom-range"><input type="date" id="r-from" value="${ui.from}" aria-label="From"><span>→</span><input type="date" id="r-to" value="${ui.to}" aria-label="To"></span>` : ''}
       <select id="tag-filter" class="btn filter-tag-select ${ui.tag ? 'has-value' : ''}" aria-label="Filter by tag">

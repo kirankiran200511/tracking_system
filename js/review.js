@@ -19,8 +19,32 @@ const Review = (() => {
       const direction = d.direction !== undefined ? d.direction : d.type === 'income' ? 'credit' : 'debit';
       const type = d.type || (direction === 'credit' ? 'income' : 'expense');
       const cat = d.category && Store.cat(d.category)?.type === type ? d.category : null;
-      // already in SpendWise: same date and amount, same direction (when known)
-      const dupe = Store.state.txns.some((t) => t.date === d.date && Math.abs(t.amount - d.amount) < 0.01 && (!direction || (t.type === 'income') === (direction === 'credit')));
+
+      // Check if this transaction already exists in the system
+      const existingMatch = Store.state.txns.find((t) => {
+        const sameAmt = Math.abs(t.amount - d.amount) < 0.01;
+        if (!sameAmt) return false;
+        const sameDir = !direction || (t.type === 'income') === (direction === 'credit');
+        if (!sameDir) return false;
+        if (t.date === d.date) return true;
+        // Check if dates are within 1 day (clearance vs transaction date) with matching payee/narration
+        const dayDiff = Math.abs(U.daysBetween(t.date, d.date));
+        if (dayDiff <= 1) {
+          const p1 = U.normPayee(t.payee || '');
+          const p2 = U.normPayee(d.payee || d.desc || '');
+          if (p1 && p2 && (p1.includes(p2) || p2.includes(p1))) return true;
+        }
+        return false;
+      });
+
+      const dupe = !!existingMatch;
+
+      // If document is uploaded and already in system, link document to the existing transaction
+      if (existingMatch && d._docId && !existingMatch.docIds.includes(d._docId)) {
+        existingMatch.docIds.push(d._docId);
+        Store.linkDoc(d._docId, [existingMatch.id]);
+      }
+
       return {
         id: 'r' + i, date: d.date || U.todayISO(), amount: Number(d.amount) || 0, direction: direction || null,
         desc: d.desc || d.raw || '', payee: d.payee || '', type, category: cat, method: d.method || null, workspace: d.workspace || 'personal',
@@ -28,28 +52,40 @@ const Review = (() => {
         docId: d._docId || null, source: d.source || ctx.source || 'upload', dupe, include: !dupe, skip: false, linkTo: '', newSub: null, balance: d.balance ?? null,
       };
     });
+
+    const dupes = items.filter((it) => it.dupe);
+    // If every transaction already exists in the system, skip questions entirely
+    if (items.length > 0 && dupes.length === items.length) {
+      Store.commit();
+      U.toast(`All ${items.length} transactions in “${ctx.docName || 'document'}” already exist in SpendWise. Duplicates skipped and document linked.`, 'success');
+      App.closeModal();
+      return;
+    }
+
     items.forEach((it) => {
       if (it.hint === 'card-bill' || it.hint === 'self') it.skip = true; // suggested; user confirms
       // "sure" only when your own rules/history already say how to file this payee
       it.confident = !!(it.direction && it.category && it.amount && it.learned && !it.hint && it.payee);
     });
-    // group by direction + payee + purpose (salary and a reimbursement from the same employer stay separate)
+
+    // Only group new (non-duplicate) items for review questions
     const groups = [];
     const byKey = {};
-    items.forEach((it) => {
+    items.filter((it) => !it.dupe).forEach((it) => {
       const p = U.normPayee(it.payee);
       const key = p.length >= 3 && it.direction ? `${it.direction}|${p}|${it.category || '?'}|${it.hint || ''}` : it.id;
       if (!byKey[key]) { byKey[key] = { key, items: [], remember: true, applyAll: true }; groups.push(byKey[key]); }
       byKey[key].items.push(it);
     });
-    S = { items, groups, ctx, step: 'overview', mode: 'all', q: 0, queue: [] };
+
+    S = { items, groups, ctx, step: 'overview', mode: 'unsure', q: 0, queue: [] };
     App.modal('<div id="rv" class="rv"></div>', { wide: true });
     render();
   }
 
-  const needsQuestion = (g) => g.items.some((it) => it.include && (!it.confident || it.hint || !it.direction));
+  const needsQuestion = (g) => g.items.some((it) => it.include && !it.dupe && (!it.confident || it.hint || !it.direction));
   function buildQueue() {
-    const pool = S.groups.filter((g) => g.items.some((it) => it.include) && (S.mode === 'all' || needsQuestion(g)));
+    const pool = S.groups.filter((g) => g.items.some((it) => it.include && !it.dupe) && (S.mode === 'all' || needsQuestion(g)));
     const total = (g) => U.sum(g.items, (i) => i.amount);
     const dirRank = (g) => (g.items[0].direction === 'debit' ? 0 : g.items[0].direction === 'credit' ? 1 : -1); // unknown first
     S.queue = pool.sort((a, b) => dirRank(a) - dirRank(b) || total(b) - total(a));
@@ -73,28 +109,36 @@ const Review = (() => {
   const dirBadge = (d) => (d ? `<span class="dir dir-${d}">${DIR[d].icon} ${DIR[d].label}</span>` : '<span class="dir dir-unknown">? In or out</span>');
 
   function overview() {
-    const inc = S.items.filter((i) => i.include);
+    const inc = S.items.filter((i) => i.include && !i.dupe);
     const out = inc.filter((i) => i.direction === 'debit'), inn = inc.filter((i) => i.direction === 'credit'), unk = inc.filter((i) => !i.direction);
     const dupes = S.items.filter((i) => i.dupe), transfers = inc.filter((i) => i.hint === 'card-bill' || i.hint === 'self');
     const dates = S.items.map((i) => i.date).sort();
     S.mode = S.mode || 'unsure';
-    const qUnsure = S.groups.filter((g) => g.items.some((it) => it.include) && needsQuestion(g)).length;
-    const qAll = S.groups.filter((g) => g.items.some((it) => it.include)).length;
+    const qUnsure = S.groups.filter((g) => g.items.some((it) => it.include && !it.dupe) && needsQuestion(g)).length;
+    const qAll = S.groups.filter((g) => g.items.some((it) => it.include && !it.dupe)).length;
     const list = (arr) => arr.slice(0, 7).map((i) => `<li><span class="muted">${U.fmtDate(i.date, { short: true })}</span><span class="ellipsis">${U.esc(i.payee || i.desc || '—')}</span><b class="num">${U.money(i.amount)}</b></li>`).join('') + (arr.length > 7 ? `<li class="muted">+ ${arr.length - 7} more</li>` : '');
     return `
       <div class="modal-head"><div><h2>Review ${S.ctx.docName ? `“${U.esc(S.ctx.docName)}”` : 'transactions'}</h2><p class="muted small">${S.items.length} found${dates.length ? ` · ${U.fmtDate(dates[0])} – ${U.fmtDate(dates[dates.length - 1])}` : ''}</p></div><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+      ${dupes.length ? `
+      <div class="notice" style="background:var(--accent-soft); border-radius:12px; padding:12px 14px; margin-bottom:14px; display:flex; align-items:center; gap:10px;">
+        <span style="font-size:20px;">⧉</span>
+        <div>
+          <b>${dupes.length} duplicate transaction${dupes.length === 1 ? '' : 's'} removed</b>
+          <p class="muted small" style="margin:2px 0 0;">Already exist in SpendWise and linked to this document. Only reviewing the <b>${inc.length} new transaction${inc.length === 1 ? '' : 's'}</b>.</p>
+        </div>
+      </div>` : ''}
       <div class="rv-split">
-        <section class="rv-side out"><header>${dirBadge('debit')}<span class="muted small">Debits</span></header><div class="rv-total">${U.money(sumOf(out))}</div><div class="muted small">${out.length} transactions</div><ul class="rv-mini">${list(out)}</ul></section>
-        <section class="rv-side in"><header>${dirBadge('credit')}<span class="muted small">Credits</span></header><div class="rv-total">${U.money(sumOf(inn))}</div><div class="muted small">${inn.length} transactions</div><ul class="rv-mini">${list(inn)}</ul></section>
+        <section class="rv-side out"><header>${dirBadge('debit')}<span class="muted small">Debits (New)</span></header><div class="rv-total">${U.money(sumOf(out))}</div><div class="muted small">${out.length} new transactions</div><ul class="rv-mini">${list(out)}</ul></section>
+        <section class="rv-side in"><header>${dirBadge('credit')}<span class="muted small">Credits (New)</span></header><div class="rv-total">${U.money(sumOf(inn))}</div><div class="muted small">${inn.length} new transactions</div><ul class="rv-mini">${list(inn)}</ul></section>
       </div>
       <ul class="rv-flags">
         ${unk.length ? `<li class="warn">? <b>${unk.length}</b> couldn’t be classified as in or out — you’ll be asked.</li>` : ''}
         ${transfers.length ? `<li>🔁 <b>${transfers.length}</b> look like transfers between your own accounts or card-bill payments (${U.money(sumOf(transfers))}) — suggested to leave out so nothing is counted twice.</li>` : ''}
-        ${dupes.length ? `<li>⧉ <b>${dupes.length}</b> already exist in SpendWise (same date & amount) — skipped.</li>` : ''}
+        ${dupes.length ? `<li>⧉ <b>${dupes.length}</b> already exist in SpendWise (same date & amount) — skipped automatically.</li>` : ''}
         <li>✓ <b>${inc.filter((i) => i.confident && !i.hint).length}</b> recognised automatically from your rules and history.</li>
       </ul>
       <fieldset class="choice-list rv-mode">
-        <label class="choice"><input type="radio" name="mode" value="all" ${S.mode === 'all' ? 'checked' : ''}><b>Ask me about each transaction</b><span>${qAll} question${qAll === 1 ? '' : 's'} — repeat payments to the same payee are grouped, and my best guess is pre-selected so it’s one click when it’s right.</span></label>
+        <label class="choice"><input type="radio" name="mode" value="all" ${S.mode === 'all' ? 'checked' : ''}><b>Ask me about each new transaction</b><span>${qAll} question${qAll === 1 ? '' : 's'} — repeat payments to the same payee are grouped, and my best guess is pre-selected so it’s one click when it’s right.</span></label>
         <label class="choice"><input type="radio" name="mode" value="unsure" ${S.mode === 'unsure' ? 'checked' : ''}><b>Only ask what SpendWise can’t work out</b><span>${qUnsure} question${qUnsure === 1 ? '' : 's'} — payees already known from your rules and history are filed automatically.</span></label>
       </fieldset>
       <div class="row-end"><button class="btn ghost" data-go="review">Skip questions — go to table</button><button class="btn primary" data-go="start" autofocus>${qUnsure || S.mode === 'all' ? 'Start →' : 'Continue →'}</button></div>`;
@@ -163,7 +207,7 @@ const Review = (() => {
           ${cur.hint === 'atm' && !cur.skip ? '<p class="muted small">🏧 ATM withdrawal: file it as spending (e.g. “Other”), or mark it as a transfer if you track cash separately.</p>' : ''}
           ${cur.hint && cur.hint !== 'atm' ? `<p class="muted small">💡 The narration looks like ${cur.hint === 'card-bill' ? 'a credit-card bill payment' : 'a transfer between your own accounts'}. Counting it would double-count spending.</p>` : ''}`) : ''}
 
-        ${dir && !cur.skip ? Q('Personal or work?', `<div class="qchips" data-q="workspace">${chip('personal', '🙂 Personal', cur.workspace === 'personal')}${chip('work', '💼 Work / business', cur.workspace === 'work')}</div>`) : ''}
+        ${dir && !cur.skip ? Q('Personal or work?', `<div class="qchips" data-q="workspace">${chip('personal', 'Personal', cur.workspace === 'personal')}${chip('work', 'Work / business', cur.workspace === 'work')}</div>`) : ''}
 
         ${dir === 'debit' && !cur.skip && cur.workspace === 'work' && cur.type === 'expense' ? Q('Will you claim this back from your employer or client?', `<div class="qchips" data-q="reimbursable">${chip('yes', '✓ Yes — reimbursable', cur.reimbursable)}${chip('no', 'No — business cost', !cur.reimbursable)}</div>`) : ''}
 
@@ -204,9 +248,9 @@ const Review = (() => {
   }
 
   function reviewTable() {
-    const inc = S.items.filter((i) => i.include && !i.skip && i.direction);
+    const inc = S.items.filter((i) => i.include && !i.skip && i.direction && !i.dupe);
     const out = inc.filter((i) => i.direction === 'debit'), inn = inc.filter((i) => i.direction === 'credit');
-    const left = S.items.filter((i) => !i.include || i.skip || !i.direction);
+    const left = S.items.filter((i) => !i.include || i.skip || !i.direction || i.dupe);
     const catOpts = (i) => Store.catsOf(i.type).map((c) => `<option ${c.name === i.category ? 'selected' : ''}>${U.esc(c.name)}</option>`).join('');
     const rows = (arr) => arr.map((i) => `<tr data-id="${i.id}">
         <td>${U.fmtDate(i.date, { short: true })}</td>
@@ -322,7 +366,7 @@ const Review = (() => {
     });
     U.$$('[data-restore]', host).forEach((b) => b.addEventListener('click', () => {
       const it = S.items.find((x) => x.id === b.dataset.restore);
-      it.include = true; it.skip = false;
+      it.include = true; it.skip = false; it.dupe = false;
       if (!it.direction) { it.direction = 'debit'; it.type = 'expense'; }
       render();
     }));
@@ -354,7 +398,7 @@ const Review = (() => {
   // ---------- saving ----------
   function commit() {
     const st = Store.state;
-    const inc = S.items.filter((i) => i.include && !i.skip && i.direction);
+    const inc = S.items.filter((i) => i.include && !i.skip && i.direction && !i.dupe);
     if (!inc.length) return U.toast('Nothing to import', 'error');
     const fallback = { expense: 'Other', income: 'Other Income', investment: 'Mutual Funds', saving: 'Savings' };
     // new subscriptions requested in the questions (one per group)

@@ -146,6 +146,7 @@ Object.assign(Views, (() => {
   }
 
   // =========================== WEALTH ===========================
+  let wealthCatFilter = 'all';
   function wealth(root) {
     const st = Store.state;
     const K = Store.ASSET_KINDS;
@@ -154,6 +155,17 @@ Object.assign(Views, (() => {
     const totalA = U.sum(assets.filter((a) => !a.liability), (a) => a.value), totalL = U.sum(assets.filter((a) => a.liability), (a) => a.value);
     const invested = U.sum(assets.filter((a) => !a.liability && a.invested), (a) => a.invested);
     const invValue = U.sum(assets.filter((a) => !a.liability && a.invested), (a) => a.value);
+
+    // Available categories in assets
+    const availableKinds = [...new Set(assets.map((a) => a.kind))].sort();
+
+    // Filtered assets for table
+    const filteredAssets = wealthCatFilter === 'all' ? assets
+      : wealthCatFilter === 'assets' ? assets.filter((a) => !a.liability)
+      : wealthCatFilter === 'liabilities' ? assets.filter((a) => a.liability)
+      : assets.filter((a) => a.kind === wealthCatFilter);
+    const filteredTotal = U.sum(filteredAssets, (a) => a.value);
+
     // allocation by kind — top 7 kinds + Other, colors assigned in fixed slot order by kind list
     const kindOrder = Object.keys(K).filter((k) => !K[k].liability);
     const byKind = kindOrder.map((k) => ({ k, value: U.sum(assets.filter((a) => a.kind === k), (a) => a.value) })).filter((x) => x.value > 0).sort((a, b) => b.value - a.value);
@@ -161,6 +173,19 @@ Object.assign(Views, (() => {
     if (byKind.length > 7) parts.push({ name: 'Other', value: U.sum(byKind.slice(7), (x) => x.value), color: 'var(--muted)' });
     const c = { range: A.resolveRange(st.ui) };
     const inv = A.filter(st.txns, { ...c.range, types: ['investment'], workspace: st.ui.workspace });
+
+    const filterExtra = assets.length ? `
+      <div class="row" style="align-items:center; gap:6px;">
+        <label for="w-cat-filter" class="muted small" style="margin:0;">Category:</label>
+        <select id="w-cat-filter" class="btn sm" aria-label="Filter by category" style="max-width:210px;">
+          <option value="all" ${wealthCatFilter === 'all' ? 'selected' : ''}>All categories (${assets.length})</option>
+          <option value="assets" ${wealthCatFilter === 'assets' ? 'selected' : ''}>All Assets (${assets.filter((a) => !a.liability).length})</option>
+          <option value="liabilities" ${wealthCatFilter === 'liabilities' ? 'selected' : ''}>All Liabilities (${assets.filter((a) => a.liability).length})</option>
+          <optgroup label="Categories">
+            ${availableKinds.map((k) => `<option value="${k}" ${wealthCatFilter === k ? 'selected' : ''}>${K[k]?.icon || '📦'} ${K[k]?.label || k} (${assets.filter((a) => a.kind === k).length})</option>`).join('')}
+          </optgroup>
+        </select>
+      </div>` : '';
 
     root.innerHTML = `
       <div class="page-head"><div><h1>Wealth</h1><p class="muted">Net worth = everything you own − everything you owe. Update balances monthly for a clean trend.</p></div>
@@ -176,9 +201,12 @@ Object.assign(Views, (() => {
         ${card('Asset allocation', parts.length ? '' : Charts.empty('No assets yet.'), { id: parts.length ? 'nw-alloc' : '' })}
       </div>
       <div class="grid g-2-1">
-        ${card('Accounts & holdings', assets.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>Type</th><th class="num">Value</th><th class="num">Invested</th><th class="num">Gain</th><th>Updated</th><th></th></tr></thead><tbody>
-          ${assets.sort((a, b) => a.liability - b.liability || b.value - a.value).map((a) => { const last = [...a.history].sort((x, y) => (x.date < y.date ? 1 : -1))[0]; const gain = a.invested ? a.value - a.invested : null; return `<tr data-id="${a.id}"><td>${K[a.kind]?.icon || ''} <b>${U.esc(a.name)}</b></td><td class="muted">${K[a.kind]?.label || a.kind}</td><td class="num ${a.liability ? 'neg' : ''}">${a.liability ? '−' : ''}${U.money(a.value)}</td><td class="num muted">${a.invested ? U.money(a.invested) : ''}</td><td class="num">${gain == null ? '' : `<span class="delta ${gain >= 0 ? 'good' : 'bad'}">${gain >= 0 ? '▲' : '▼'} ${U.pct(Math.abs(gain) / a.invested, 1)}</span>`}</td><td class="muted small">${last ? U.fmtDate(last.date, { short: true }) : ''}</td><td class="nowrap"><div class="cell-actions"><button class="btn sm" data-upd>Update</button><button class="icon-btn" data-edit aria-label="Edit">✎</button></div></td></tr>`; }).join('')}
-        </tbody></table></div>` : '<div class="empty-mini">Add your bank accounts, mutual funds, stocks, FDs, gold, PF, loans and credit cards.</div>')}
+        ${card('Accounts & holdings', filteredAssets.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>Type</th><th class="num">Value</th><th class="num">Invested</th><th class="num">Gain</th><th>Updated</th><th></th></tr></thead><tbody>
+          ${filteredAssets.sort((a, b) => a.liability - b.liability || b.value - a.value).map((a) => { const last = [...a.history].sort((x, y) => (x.date < y.date ? 1 : -1))[0]; const gain = a.invested ? a.value - a.invested : null; return `<tr data-id="${a.id}"><td>${K[a.kind]?.icon || ''} <b>${U.esc(a.name)}</b></td><td class="muted">${K[a.kind]?.label || a.kind}</td><td class="num ${a.liability ? 'neg' : ''}">${a.liability ? '−' : ''}${U.money(a.value)}</td><td class="num muted">${a.invested ? U.money(a.invested) : ''}</td><td class="num">${gain == null ? '' : `<span class="delta ${gain >= 0 ? 'good' : 'bad'}">${gain >= 0 ? '▲' : '▼'} ${U.pct(Math.abs(gain) / a.invested, 1)}</span>`}</td><td class="muted small">${last ? U.fmtDate(last.date, { short: true }) : ''}</td><td class="nowrap"><div class="cell-actions"><button class="btn sm" data-upd>Update</button><button class="icon-btn" data-edit aria-label="Edit">✎</button></div></td></tr>`; }).join('')}
+        </tbody></table></div>` : assets.length ? `<div class="empty-mini">No holdings match the selected category. <button class="link-btn" id="w-clear-cat">Show all categories</button></div>` : '<div class="empty-mini">Add your bank accounts, mutual funds, stocks, FDs, gold, PF, loans and credit cards.</div>', {
+          extra: filterExtra,
+          sub: wealthCatFilter !== 'all' ? `Showing ${filteredAssets.length} of ${assets.length} · Subtotal: ${U.money(filteredTotal)}` : ''
+        })}
         ${card('Invested this period', '', { id: 'w-inv', sub: 'From your investment transactions' })}
       </div>`;
     const draw = () => {
@@ -190,6 +218,14 @@ Object.assign(Views, (() => {
     draw();
     U.$('#w-add').addEventListener('click', () => assetModal());
     U.$('#w-snap').addEventListener('click', snapshotModal);
+    U.$('#w-cat-filter')?.addEventListener('change', (e) => {
+      wealthCatFilter = e.target.value;
+      wealth(root);
+    });
+    U.$('#w-clear-cat')?.addEventListener('click', () => {
+      wealthCatFilter = 'all';
+      wealth(root);
+    });
     U.$$('tr[data-id]', root).forEach((tr) => {
       const a = st.assets.find((x) => x.id === tr.dataset.id);
       U.$('[data-upd]', tr).addEventListener('click', () => updateValueModal(a));
@@ -388,6 +424,7 @@ Object.assign(Views, (() => {
               </div>
             </div>
             <div class="account-actions">
+              <button class="btn" id="auth-change-pwd">🔑 Change Password</button>
               <button class="btn danger" id="auth-signout-settings">Sign Out</button>
             </div>
           </div>`)}
@@ -426,7 +463,7 @@ Object.assign(Views, (() => {
           <div class="settings-section">
             <p class="muted small">Choose which columns are visible in the transactions table.</p>
             <div class="col-manager" id="col-mgr">
-              ${[['date', 'Date'], ['payee', 'Payee / Category'], ['labels', 'Labels (workspace, tags)'], ['method', 'Payment method'], ['amount', 'Amount']].map(([k, l]) => `<div class="col-item"><label><input type="checkbox" ${s.columns[k] !== false ? 'checked' : ''} data-col="${k}"> ${l}</label></div>`).join('')}
+              ${[['date', 'Date'], ['payee', 'Payee / Category'], ['labels', 'Category (tags, status)'], ['method', 'Payment method'], ['amount', 'Amount']].map(([k, l]) => `<div class="col-item"><label><input type="checkbox" ${s.columns[k] !== false ? 'checked' : ''} data-col="${k}"> ${l}</label></div>`).join('')}
             </div>
           </div>`)}
         ${card('Your data', `
@@ -460,6 +497,7 @@ Object.assign(Views, (() => {
         Auth.logout();
       }
     });
+    U.$('#auth-change-pwd')?.addEventListener('click', () => changePasswordModal());
     const f = U.$('#sf');
     f.addEventListener('change', () => {
       Object.assign(s, { name: f.name.value, voiceLang: f.voiceLang.value, theme: f.theme.value });
@@ -516,6 +554,90 @@ Object.assign(Views, (() => {
       s.columns[cb.dataset.col] = cb.checked;
       Store.commit();
     }));
+  }
+
+  function changePasswordModal() {
+    const email = (typeof Auth !== 'undefined' ? Auth.getUserEmail() : '') || 'Active Account';
+    let directReset = false;
+
+    App.modal(`<div class="modal-head"><h2>Change Password</h2><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+      <form class="grid-form" id="pwd-form">
+        <div class="full" style="padding:8px 12px; background:var(--surface-2); border-radius:10px; font-size:13px; color:var(--ink-2); display:flex; justify-content:space-between; align-items:center;">
+          <span>Account: <b style="color:var(--ink);">${U.esc(email)}</b></span>
+          <span style="font-size:11px; padding:2px 6px; background:var(--accent-soft); color:var(--accent); border-radius:6px;">Local & Cloud</span>
+        </div>
+        <div id="pwd-direct-notice" class="full" style="display:none; padding:8px 12px; background:color-mix(in srgb, var(--good-text) 12%, transparent); color:var(--good-text); border-radius:10px; font-size:12.5px;">
+          ✓ Direct reset mode: setting a new password without requiring current password.
+        </div>
+        <div class="full" id="pwd-current-wrap">
+          <label>Current password
+            <input name="current" type="password" placeholder="Enter current password" autocomplete="current-password">
+          </label>
+          <div style="display:flex; justify-content:flex-end; margin-top:4px;">
+            <button type="button" id="pwd-toggle-direct" style="background:none; border:none; padding:0; color:var(--muted); font-size:12px; cursor:pointer; text-decoration:underline;">Forgot current password? Reset directly</button>
+          </div>
+        </div>
+        <label class="full">New password<input name="newpwd" type="password" required placeholder="At least 6 characters" minlength="6" autocomplete="new-password"></label>
+        <label class="full">Confirm new password<input name="confirm" type="password" required placeholder="Repeat new password" autocomplete="new-password"></label>
+        <div id="pwd-error" class="pwd-error" style="display:none;"></div>
+        <div class="row-end full">
+          <button type="button" class="btn" data-close>Cancel</button>
+          <button class="btn primary" id="pwd-submit">Update Password</button>
+        </div>
+      </form>`);
+
+    const f = U.$('#pwd-form');
+    const errBox = U.$('#pwd-error');
+    const directNotice = U.$('#pwd-direct-notice');
+    const currentWrap = U.$('#pwd-current-wrap');
+    const toggleDirect = U.$('#pwd-toggle-direct');
+    const btn = U.$('#pwd-submit');
+
+    toggleDirect?.addEventListener('click', () => {
+      directReset = true;
+      currentWrap.style.display = 'none';
+      directNotice.style.display = 'block';
+      btn.textContent = 'Reset Password';
+      f.newpwd.focus();
+    });
+
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errBox.style.display = 'none';
+      const current = f.current ? f.current.value : '';
+      const newpwd = f.newpwd.value;
+      const confirm = f.confirm.value;
+
+      if (!directReset && !current) {
+        errBox.textContent = 'Please enter your current password, or click "Reset directly" above.';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      if (newpwd !== confirm) {
+        errBox.textContent = 'New passwords do not match.';
+        errBox.style.display = 'block';
+        return;
+      }
+      if (newpwd.length < 6) {
+        errBox.textContent = 'Password must be at least 6 characters.';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Updating…';
+      try {
+        await Auth.changePassword(current, newpwd, directReset);
+        App.closeModal();
+        U.toast('Password changed successfully!', 'success');
+      } catch (err) {
+        errBox.textContent = err.message || 'Failed to change password.';
+        errBox.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = directReset ? 'Reset Password' : 'Update Password';
+      }
+    });
   }
 
   return { budgets, goals, wealth, documents, settings, openDoc, currencyModal };

@@ -127,7 +127,7 @@ const Capture = (() => {
         <label>Date<input name="date" type="date" required value="${t.date || U.todayISO()}"></label>
         <label>${type === 'income' ? 'From' : 'Paid to'}<input name="payee" list="payee-list" value="${U.esc(t.payee || '')}" placeholder="Person, shop or company"></label>
         <label>Category<select name="category">${catOptions(type, t.category)}</select></label>
-        <label>Workspace<select name="workspace">${opts([['personal', '🙂 Personal'], ['work', '💼 Work']], t.workspace || 'personal')}</select></label>
+        <label>Workspace<select name="workspace">${opts([['personal', 'Personal'], ['work', 'Work']], t.workspace || 'personal')}</select></label>
         <label>Payment method<select name="method">${Store.METHODS.map((m) => `<option ${m === (t.method || 'UPI') ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
         <label class="full">Note<input name="note" value="${U.esc(t.note || '')}" placeholder="Optional"></label>
         <label>Tags<input name="tags" value="${U.esc((t.tags || []).join(', '))}" placeholder="trip-goa, gifts"></label>

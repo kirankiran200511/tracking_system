@@ -51,7 +51,7 @@ const Views = (() => {
       ${check ? `<td class="c-check"><input type="checkbox" aria-label="Select" ${selected.has(t.id) ? 'checked' : ''}></td>` : ''}
       <td class="c-date">${U.fmtDate(t.date, { short: true })}<small>${t.date.slice(0, 4)}</small></td>
       <td class="c-payee"><div class="payee-cell"><span class="cat-ico" aria-hidden="true">${Store.icon(t.category)}</span><div><b>${U.esc(t.payee || t.category)}</b><small>${U.esc(t.category)}${t.note ? ' · ' + U.esc(t.note) : ''}</small></div></div></td>
-      <td class="c-tags">${t.workspace === 'work' ? '<span class="pill work">Work</span>' : '<span class="pill">Personal</span>'}${t.reimbursable ? `<span class="pill ${t.reimbursed ? 'ok' : 'warn'}">${t.reimbursed ? 'Reimbursed' : 'To claim'}</span>` : ''}${t.linkId ? `<span class="pill" title="Linked to a subscription or EMI">${Store.state.emis.some((l) => l.id === t.linkId) ? '🏦 EMI' : '🔁 Sub'}</span>` : ''}${t.docIds.length ? '<span class="pill" title="Has document">📎</span>' : ''}${t.tags.map((x) => `<span class="pill tag">#${U.esc(x)}</span>`).join('')}</td>
+      <td class="c-tags"><span class="cat-label">${U.esc(t.category)}</span><div class="tag-pills">${t.workspace === 'work' ? '<span class="pill work">Work</span>' : ''}${t.reimbursable ? `<span class="pill ${t.reimbursed ? 'ok' : 'warn'}">${t.reimbursed ? 'Reimbursed' : 'To claim'}</span>` : ''}${t.linkId ? `<span class="pill" title="Linked to a subscription or EMI">${Store.state.emis.some((l) => l.id === t.linkId) ? '🏦 EMI' : '🔁 Sub'}</span>` : ''}${t.docIds.length ? '<span class="pill" title="Has document">📎</span>' : ''}${t.tags.map((x) => `<span class="pill tag">#${U.esc(x)}</span>`).join('')}</div></td>
       <td class="c-method muted">${U.esc(t.method)}</td>
       <td class="c-amt num ${t.type}">${t.type === 'income' ? '+' : t.type === 'expense' ? '−' : ''}${U.money(t.amount)}<small>${TYPE_LABEL[t.type]}</small></td>
     </tr>`;
@@ -208,9 +208,9 @@ const Views = (() => {
         <input id="tx-search" type="search" placeholder="Search payee, note, tag, amount…  ( / )" value="${U.esc(txFilter.search)}">
         ${multiSelect('types', 'Type', Object.keys(TYPE_LABEL), txFilter.types)}
         ${multiSelect('categories', 'Category', cats, txFilter.categories)}
+        ${allTags.length ? multiSelect('tags', 'Tag', allTags, txFilter.tags || (txFilter.tag ? [txFilter.tag] : [])) : ''}
         ${multiSelect('payees', 'Payee', payees, txFilter.payees)}
         ${multiSelect('methods', 'Method', Store.METHODS, txFilter.methods)}
-        ${allTags.length ? multiSelect('tags', 'Tag', allTags, txFilter.tags || (txFilter.tag ? [txFilter.tag] : [])) : ''}
         <details class="ms"><summary class="btn sm">Amount${txFilter.min || txFilter.max ? ' <b class="badge">•</b>' : ''}</summary><div class="ms-pop"><div class="inline"><input id="f-min" type="number" placeholder="Min" value="${txFilter.min}"><input id="f-max" type="number" placeholder="Max" value="${txFilter.max}"></div></div></details>
         <select id="f-reimb" class="btn sm"><option value="">All claims</option><option value="any" ${txFilter.reimb === 'any' ? 'selected' : ''}>Reimbursable</option><option value="pending" ${txFilter.reimb === 'pending' ? 'selected' : ''}>Pending claim</option></select>
         <label class="check sm"><input type="checkbox" id="f-doc" ${txFilter.hasDoc ? 'checked' : ''}> Has doc</label>
@@ -232,7 +232,7 @@ const Views = (() => {
         <thead><tr><th class="c-check"><input type="checkbox" id="sel-all" aria-label="Select all"></th>
           <th class="sortable" data-sort="date">Date ${key === 'date' ? (dir < 0 ? '↓' : '↑') : ''}</th>
           <th class="sortable" data-sort="payee">Payee / category ${key === 'payee' ? (dir < 0 ? '↓' : '↑') : ''}</th>
-          <th>Labels</th><th>Method</th>
+          <th>Category</th><th>Method</th>
           <th class="sortable num" data-sort="amount">Amount ${key === 'amount' ? (dir < 0 ? '↓' : '↑') : ''}</th></tr></thead>
         <tbody>${list.slice(0, txFilter.limit).map((t) => txnRow(t, { check: true })).join('') || `<tr><td colspan="6" class="empty-row">No transactions match. ${active ? '<button class="link-btn" id="f-clear2">Clear filters</button>' : ''}</td></tr>`}</tbody>
       </table></div>
