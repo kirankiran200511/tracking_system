@@ -409,6 +409,45 @@ th.sortable:hover { color: var(--ink); }
 .pill.tag { background: transparent; border: 1px solid var(--border); }
 .empty-row { text-align: center; padding: 40px !important; color: var(--muted); }
 
+.txn-table tr.txn-skipped td {
+  background: color-mix(in srgb, var(--surface) 94%, var(--warn-text) 6%);
+  opacity: 0.88;
+}
+.txn-table tr.txn-skipped:hover td {
+  background: color-mix(in srgb, var(--surface-2) 90%, var(--warn-text) 10%);
+}
+.skipped-detail {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--warn-text);
+  font-weight: 500;
+  margin-top: 3px;
+  background: color-mix(in srgb, var(--st-warning) 16%, transparent);
+  padding: 1px 7px;
+  border-radius: 4px;
+  max-width: 100%;
+}
+.skipped-icon {
+  font-weight: 700;
+  font-size: 11px;
+}
+.strike {
+  text-decoration: line-through;
+  opacity: 0.65;
+}
+.c-amt.amt-skipped {
+  color: var(--muted);
+}
+.c-amt.amt-skipped .warn {
+  color: var(--warn-text);
+  font-weight: 600;
+}
+.sum-strip b.warn {
+  color: var(--warn-text);
+}
+
 /* transactions filter bar */
 .filterbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
 .filterbar > input[type=search] { flex: 1 1 260px; width: auto; }

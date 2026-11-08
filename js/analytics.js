@@ -35,6 +35,14 @@ const A = (() => {
   function filter(txns, f = {}) {
     const q = (f.search || '').toLowerCase();
     return txns.filter((t) => {
+      if (f.status === 'skipped') {
+        if (!t.skipped) return false;
+      } else if (f.status === 'all') {
+        // include both active and skipped
+      } else {
+        // default: only active (non-skipped) transactions
+        if (t.skipped) return false;
+      }
       if (f.from && t.date < f.from) return false;
       if (f.to && t.date > f.to) return false;
       if (f.workspace && f.workspace !== 'all' && t.workspace !== f.workspace) return false;
@@ -49,15 +57,18 @@ const A = (() => {
       if (f.hasDoc && !t.docIds.length) return false;
       if (f.tag && !t.tags.includes(f.tag)) return false;
       if (f.tags?.length && !f.tags.some((tag) => t.tags.includes(tag))) return false;
-      if (q && !`${t.payee} ${t.category} ${t.note} ${t.tags.join(' ')} ${t.method} ${t.amount}`.toLowerCase().includes(q)) return false;
+      if (q && !`${t.payee} ${t.category} ${t.note} ${t.tags.join(' ')} ${t.method} ${t.amount} ${t.skipReason || ''}`.toLowerCase().includes(q)) return false;
       return true;
     });
   }
 
   function totals(txns) {
-    const by = (type) => U.sum(txns.filter((t) => t.type === type), (t) => t.amount);
+    const activeTxns = txns.filter((t) => !t.skipped);
+    const by = (type) => U.sum(activeTxns.filter((t) => t.type === type), (t) => t.amount);
     const income = by('income'), expense = by('expense'), invested = by('investment'), saved = by('saving');
-    return { income, expense, invested, saved, net: income - expense, savingsRate: income ? (income - expense) / income : NaN, count: txns.length };
+    const skipped = U.sum(txns.filter((t) => t.skipped), (t) => t.amount);
+    const skippedCount = txns.filter((t) => t.skipped).length;
+    return { income, expense, invested, saved, net: income - expense, savingsRate: income ? (income - expense) / income : NaN, count: activeTxns.length, skipped, skippedCount };
   }
 
   // Daily series with zero-filled gaps.

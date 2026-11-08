@@ -9,7 +9,7 @@ const Views = (() => {
   };
 
   // Transactions page filter (drill-downs from charts write into this).
-  const txFilter = { search: '', types: [], categories: [], payees: [], methods: [], tags: [], min: '', max: '', reimb: '', hasDoc: false, tag: '', sort: 'date', dir: -1, limit: 100 };
+  const txFilter = { search: '', status: 'all', types: [], categories: [], payees: [], methods: [], tags: [], min: '', max: '', reimb: '', hasDoc: false, tag: '', sort: 'date', dir: -1, limit: 100 };
   const selected = new Set();
 
   function ctx() {
@@ -27,7 +27,7 @@ const Views = (() => {
   }
 
   function drill(patch) {
-    Object.assign(txFilter, { search: '', types: [], categories: [], payees: [], methods: [], tags: [], min: '', max: '', reimb: '', hasDoc: false, tag: '', month: '', limit: 100 }, patch);
+    Object.assign(txFilter, { search: '', status: 'all', types: [], categories: [], payees: [], methods: [], tags: [], min: '', max: '', reimb: '', hasDoc: false, tag: '', month: '', limit: 100 }, patch);
     selected.clear();
     location.hash = '#/transactions';
   }
@@ -47,13 +47,13 @@ const Views = (() => {
     </section>`;
 
   const txnRow = (t, { check } = {}) => `
-    <tr data-id="${t.id}" class="${selected.has(t.id) ? 'sel' : ''}">
+    <tr data-id="${t.id}" class="${selected.has(t.id) ? 'sel' : ''} ${t.skipped ? 'txn-skipped' : ''}">
       ${check ? `<td class="c-check"><input type="checkbox" aria-label="Select" ${selected.has(t.id) ? 'checked' : ''}></td>` : ''}
       <td class="c-date">${U.fmtDate(t.date, { short: true })}<small>${t.date.slice(0, 4)}</small></td>
-      <td class="c-payee"><div class="payee-cell"><span class="cat-ico" aria-hidden="true">${Store.icon(t.category)}</span><div><b>${U.esc(t.payee || t.category)}</b><small>${U.esc(t.category)}${t.note ? ' · ' + U.esc(t.note) : ''}</small></div></div></td>
-      <td class="c-tags"><span class="cat-label">${U.esc(t.category)}</span><div class="tag-pills">${t.workspace === 'work' ? '<span class="pill work">Work</span>' : ''}${t.reimbursable ? `<span class="pill ${t.reimbursed ? 'ok' : 'warn'}">${t.reimbursed ? 'Reimbursed' : 'To claim'}</span>` : ''}${t.linkId ? `<span class="pill" title="Linked to a subscription or EMI">${Store.state.emis.some((l) => l.id === t.linkId) ? '🏦 EMI' : '🔁 Sub'}</span>` : ''}${t.docIds.length ? '<span class="pill" title="Has document">📎</span>' : ''}${t.tags.map((x) => `<span class="pill tag">#${U.esc(x)}</span>`).join('')}</div></td>
+      <td class="c-payee"><div class="payee-cell"><span class="cat-ico" aria-hidden="true">${Store.icon(t.category)}</span><div><b>${U.esc(t.payee || t.category)}</b><small>${U.esc(t.category)}${t.note ? ' · ' + U.esc(t.note) : ''}</small>${t.skipped ? `<div class="skipped-detail" title="${U.esc(t.skipReason || 'Skipped')}"><span class="skipped-icon">⊘</span> Skipped: ${U.esc(t.skipReason || 'Excluded from tracking')}</div>` : ''}</div></div></td>
+      <td class="c-tags"><span class="cat-label">${U.esc(t.category)}</span><div class="tag-pills">${t.skipped ? '<span class="pill warn">⊘ Skipped</span>' : ''}${t.workspace === 'work' ? '<span class="pill work">Work</span>' : ''}${t.reimbursable ? `<span class="pill ${t.reimbursed ? 'ok' : 'warn'}">${t.reimbursed ? 'Reimbursed' : 'To claim'}</span>` : ''}${t.linkId ? `<span class="pill" title="Linked to a subscription or EMI">${Store.state.emis.some((l) => l.id === t.linkId) ? '🏦 EMI' : '🔁 Sub'}</span>` : ''}${t.docIds.length ? '<span class="pill" title="Has document">📎</span>' : ''}${t.tags.map((x) => `<span class="pill tag">#${U.esc(x)}</span>`).join('')}</div></td>
       <td class="c-method muted">${U.esc(t.method)}</td>
-      <td class="c-amt num ${t.type}">${t.type === 'income' ? '+' : t.type === 'expense' ? '−' : ''}${U.money(t.amount)}<small>${TYPE_LABEL[t.type]}</small></td>
+      <td class="c-amt num ${t.type} ${t.skipped ? 'amt-skipped' : ''}">${t.skipped ? `<span class="strike">${t.type === 'income' ? '+' : t.type === 'expense' ? '−' : ''}${U.money(t.amount)}</span><small class="warn">Skipped</small>` : `${t.type === 'income' ? '+' : t.type === 'expense' ? '−' : ''}${U.money(t.amount)}<small>${TYPE_LABEL[t.type]}</small>`}</td>
     </tr>`;
 
   const emptyState = () => `
@@ -191,21 +191,28 @@ const Views = (() => {
     // a month drill-down (from a monthly chart) overrides the global date range
     const monthEnd = (k) => { const [y, m] = k.split('-').map(Number); return U.iso(new Date(y, m, 0)); };
     const range = txFilter.month ? { from: `${txFilter.month}-01`, to: monthEnd(txFilter.month) } : A.resolveRange(st.ui);
-    const inRange = A.filter(st.txns, { ...range, workspace: st.ui.workspace, ...(st.ui.tag ? { tag: st.ui.tag } : {}) });
+    const inRange = A.filter(st.txns, { ...range, workspace: st.ui.workspace, ...(st.ui.tag ? { tag: st.ui.tag } : {}), status: 'all' });
     let list = A.filter(inRange, txFilter);
     const key = txFilter.sort, dir = txFilter.dir;
     list = [...list].sort((a, b) => (key === 'amount' ? (a.amount - b.amount) * dir : key === 'payee' ? a.payee.localeCompare(b.payee) * dir : (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) * dir));
     const T = A.totals(list);
+    const activeCount = inRange.filter((t) => !t.skipped).length;
+    const skippedCount = inRange.filter((t) => t.skipped).length;
     const cats = st.categories.map((c) => c.name);
     const payees = [...new Set(inRange.map((t) => t.payee).filter(Boolean))].sort();
     const allTags = Store.allTags();
-    const active = txFilter.search || txFilter.types.length || txFilter.categories.length || txFilter.payees.length || txFilter.methods.length || (txFilter.tags && txFilter.tags.length) || txFilter.min || txFilter.max || txFilter.reimb || txFilter.hasDoc || txFilter.tag || txFilter.month || !!st.ui.tag;
+    const active = txFilter.search || (txFilter.status && txFilter.status !== 'all') || txFilter.types.length || txFilter.categories.length || txFilter.payees.length || txFilter.methods.length || (txFilter.tags && txFilter.tags.length) || txFilter.min || txFilter.max || txFilter.reimb || txFilter.hasDoc || txFilter.tag || txFilter.month || !!st.ui.tag;
 
     root.innerHTML = `
       <div class="page-head"><div><h1>Transactions</h1><p class="muted">${list.length} of ${inRange.length} in ${U.fmtDate(range.from)} – ${U.fmtDate(range.to)}</p></div>
         <div class="row"><button class="btn" id="tx-export">⬇ Export CSV</button><button class="btn primary" data-add>＋ Add</button></div></div>
       <div class="filterbar">
-        <input id="tx-search" type="search" placeholder="Search payee, note, tag, amount…  ( / )" value="${U.esc(txFilter.search)}">
+        <input id="tx-search" type="search" placeholder="Search payee, note, tag, amount, skipped reason…  ( / )" value="${U.esc(txFilter.search)}">
+        <select id="f-status" class="btn sm">
+          <option value="all" ${txFilter.status === 'all' ? 'selected' : ''}>Status: All (${inRange.length})</option>
+          <option value="active" ${txFilter.status === 'active' ? 'selected' : ''}>Active only (${activeCount})</option>
+          <option value="skipped" ${txFilter.status === 'skipped' ? 'selected' : ''}>Skipped only (${skippedCount})</option>
+        </select>
         ${multiSelect('types', 'Type', Object.keys(TYPE_LABEL), txFilter.types)}
         ${multiSelect('categories', 'Category', cats, txFilter.categories)}
         ${allTags.length ? multiSelect('tags', 'Tag', allTags, txFilter.tags || (txFilter.tag ? [txFilter.tag] : [])) : ''}
@@ -219,12 +226,15 @@ const Views = (() => {
       ${txFilter.month ? `<div class="notice">Showing ${U.fmtMonth(txFilter.month)} only. <button class="link-btn" id="f-month">Remove</button></div>` : ''}
       <div class="sum-strip">
         <span>Out <b class="expense">${U.money(T.expense)}</b></span><span>In <b class="income">${U.money(T.income)}</b></span><span>Invested <b>${U.money(T.invested)}</b></span><span>Saved <b>${U.money(T.saved)}</b></span><span>Net <b>${U.money(T.net)}</b></span>
+        ${T.skippedCount ? `<span>Skipped <b class="warn">${U.money(T.skipped)}</b> (${T.skippedCount})</span>` : ''}
       </div>
       <div class="bulk${selected.size ? ' show' : ''}" id="bulk">
         <b>${selected.size} selected</b>
         <select id="b-cat"><option value="">Set category…</option>${cats.map((c) => `<option>${U.esc(c)}</option>`).join('')}</select>
         <select id="b-ws"><option value="">Set workspace…</option><option value="personal">Personal</option><option value="work">Work</option></select>
         <button class="btn sm" id="b-reimb">Mark reimbursed</button>
+        <button class="btn sm" id="b-skip">Mark skipped</button>
+        <button class="btn sm" id="b-unskip">Restore (Active)</button>
         <button class="btn sm danger" id="b-del">Delete</button>
         <button class="btn sm ghost" id="b-none">Clear selection</button>
       </div>
@@ -241,6 +251,7 @@ const Views = (() => {
     const rerender = () => transactions(root);
     const s = U.$('#tx-search');
     s.addEventListener('input', U.debounce(() => { txFilter.search = s.value; rerender(); U.$('#tx-search').focus(); const v = U.$('#tx-search'); v.setSelectionRange(v.value.length, v.value.length); }, 250));
+    U.$('#f-status')?.addEventListener('change', (e) => { txFilter.status = e.target.value; rerender(); });
     U.$$('.ms[data-ms]', root).forEach((d) => {
       const name = d.dataset.ms;
       d.addEventListener('change', (e) => {
@@ -277,10 +288,17 @@ const Views = (() => {
       });
     });
     U.$('#sel-all').addEventListener('change', (e) => { list.slice(0, txFilter.limit).forEach((t) => (e.target.checked ? selected.add(t.id) : selected.delete(t.id))); rerender(); });
-    const bulk = (patch) => { selected.forEach((id) => Store.updateTxn(id, patch)); U.toast(`Updated ${selected.size}`, 'success'); selected.clear(); };
+    const bulk = (patch) => { selected.forEach((id) => Store.updateTxn(id, patch)); U.toast(`Updated ${selected.size}`, 'success'); selected.clear(); rerender(); };
     U.$('#b-cat').addEventListener('change', (e) => { const c = Store.cat(e.target.value); if (c) bulk({ category: c.name, type: c.type }); });
     U.$('#b-ws').addEventListener('change', (e) => e.target.value && bulk({ workspace: e.target.value }));
     U.$('#b-reimb').addEventListener('click', () => bulk({ reimbursable: true, reimbursed: true }));
+    U.$('#b-skip')?.addEventListener('click', () => {
+      const reason = prompt('Reason for skipping selected transactions:', 'Excluded by user');
+      if (reason !== null) bulk({ skipped: true, skipReason: reason || 'Excluded by user' });
+    });
+    U.$('#b-unskip')?.addEventListener('click', () => {
+      bulk({ skipped: false, skipReason: '' });
+    });
     U.$('#b-del').addEventListener('click', () => {
       const removed = st.txns.filter((t) => selected.has(t.id));
       Store.deleteTxns([...selected]); selected.clear(); App.undoToast(removed);
@@ -289,7 +307,7 @@ const Views = (() => {
   }
 
   function exportCSV(list) {
-    const head = ['date', 'type', 'amount', 'payee', 'category', 'workspace', 'method', 'note', 'tags', 'reimbursable', 'reimbursed'];
+    const head = ['date', 'type', 'amount', 'payee', 'category', 'workspace', 'method', 'note', 'tags', 'reimbursable', 'reimbursed', 'skipped', 'skipReason'];
     const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const csv = [head.join(','), ...list.map((t) => head.map((h) => q(h === 'tags' ? t.tags.join(';') : t[h])).join(','))].join('\n');
     U.download(`spendwise-transactions-${U.todayISO()}.csv`, csv, 'text/csv');

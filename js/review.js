@@ -399,7 +399,9 @@ const Review = (() => {
   function commit() {
     const st = Store.state;
     const inc = S.items.filter((i) => i.include && !i.skip && i.direction && !i.dupe);
-    if (!inc.length) return U.toast('Nothing to import', 'error');
+    const skippedRaw = S.items.filter((i) => (!i.include || i.skip || !i.direction || i.dupe));
+
+    if (!inc.length && !skippedRaw.length) return U.toast('Nothing to import', 'error');
     const fallback = { expense: 'Other', income: 'Other Income', investment: 'Mutual Funds', saving: 'Savings' };
     // new subscriptions requested in the questions (one per group)
     const newSubs = {};
@@ -419,11 +421,33 @@ const Review = (() => {
       date: i.date, amount: i.amount, type: i.type, category: i.category || fallback[i.type], payee: i.payee || NLP.cleanPayee(i.desc) || '(unknown)',
       workspace: i.workspace, method: i.method || 'Other', note: i.note || (i.desc ? `Bank: ${i.desc}`.slice(0, 140) : ''), tags: i.tags,
       reimbursable: i.direction === 'debit' && i.workspace === 'work' && i.reimbursable, linkId: linkIdFor(i), docIds: i.docId ? [i.docId] : [], source: i.source,
+      skipped: false,
     }));
+
+    // Record skipped transactions with full details so they are visible in Transaction view
+    const skippedTxns = skippedRaw.map((i) => {
+      let reason = 'Skipped from document';
+      if (i.dupe) reason = 'Existing duplicate in SpendWise';
+      else if (i.skip && i.hint === 'card-bill') reason = 'Credit card bill payment';
+      else if (i.skip && i.hint === 'self') reason = 'Own-account transfer';
+      else if (i.skip) reason = 'Marked as transfer';
+      else if (!i.include) reason = 'Excluded from import';
+      else if (!i.direction) reason = 'Direction unclear';
+
+      return {
+        date: i.date, amount: i.amount, type: i.type || 'expense', category: i.category || (i.skip ? 'Transfer' : 'Other'),
+        payee: i.payee || NLP.cleanPayee(i.desc) || '(unknown)', workspace: i.workspace || 'personal', method: i.method || 'Other',
+        note: i.note || (i.desc ? `Bank: ${i.desc}`.slice(0, 140) : ''), tags: i.tags || [],
+        reimbursable: false, linkId: null, docIds: i.docId ? [i.docId] : [], source: i.source || 'upload',
+        skipped: true, skipReason: reason,
+      };
+    });
+
     // we link explicitly, so don't let auto-linking guess
     const hook = Store.hooks.beforeAdd;
     Store.hooks.beforeAdd = null;
-    const added = Store.addTxns(txns);
+    const added = inc.length ? Store.addTxns(txns) : [];
+    const addedSkipped = skippedTxns.length ? Store.addTxns(skippedTxns) : [];
     Store.hooks.beforeAdd = hook;
 
     // move existing subscriptions' renewal dates past the newest linked payment
@@ -445,12 +469,17 @@ const Review = (() => {
       learned++;
     });
     // attach the source document(s)
-    const byDoc = U.groupBy(added.map((t, k) => ({ id: t.id, doc: inc[k].docId })).filter((x) => x.doc), (x) => x.doc);
+    const allAdded = [...added, ...addedSkipped];
+    const allInput = [...inc, ...skippedRaw];
+    const byDoc = U.groupBy(allAdded.map((t, k) => ({ id: t.id, doc: allInput[k]?.docId })).filter((x) => x.doc), (x) => x.doc);
     Object.entries(byDoc).forEach(([doc, xs]) => Store.linkDoc(doc, xs.map((x) => x.id)));
     Store.commit();
     App.closeModal();
     const out = inc.filter((i) => i.direction === 'debit'), inn = inc.filter((i) => i.direction === 'credit');
-    U.toast(`Imported ${added.length}: ${out.length} out (${U.money(sumOf(out))}), ${inn.length} in (${U.money(sumOf(inn))})${settled ? ` · ${settled} claims settled` : ''}${Object.keys(newSubs).length ? ` · ${Object.keys(newSubs).length} subscriptions added` : ''}${learned ? ` · ${learned} rules learned` : ''}`, 'success');
+    const summaryMsg = added.length
+      ? `Imported ${added.length}: ${out.length} out (${U.money(sumOf(out))}), ${inn.length} in (${U.money(sumOf(inn))})${addedSkipped.length ? ` · kept ${addedSkipped.length} skipped with details` : ''}`
+      : `Saved ${addedSkipped.length} skipped transactions with details to Transaction view.`;
+    U.toast(summaryMsg, 'success');
     S = null;
   }
 

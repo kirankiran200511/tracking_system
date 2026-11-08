@@ -128,6 +128,8 @@ const Store = (() => {
       tags: Array.isArray(t.tags) ? t.tags : String(t.tags || '').split(',').map((s) => s.trim()).filter(Boolean),
       reimbursable: !!t.reimbursable,
       reimbursed: !!t.reimbursed,
+      skipped: !!t.skipped,
+      skipReason: t.skipReason || '',
       goalId: t.goalId || null,
       linkId: t.linkId || null, // subscription or EMI this payment belongs to
       docIds: t.docIds || [],

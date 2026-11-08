@@ -136,7 +136,14 @@ const Capture = (() => {
           <label class="check"><input type="checkbox" name="reimbursed" ${t.reimbursed ? 'checked' : ''}> Reimbursed</label>
         </div>
         <datalist id="payee-list">${[...new Set(Store.state.txns.map((x) => x.payee).filter(Boolean))].slice(0, 300).map((p) => `<option value="${U.esc(p)}">`).join('')}</datalist>
-        <div class="row-end full">${t.id ? '<button type="button" class="btn danger ghost" data-delete>Delete</button><span class="spacer"></span>' : ''}<button type="button" class="btn" data-close>Cancel</button><button class="btn primary" type="submit">${t.id ? 'Save changes' : 'Add'}</button></div>
+        <div class="row-end full">
+          ${t.id ? '<button type="button" class="btn danger ghost" data-delete>Delete</button>' : ''}
+          ${t.id && !t.skipped ? '<button type="button" class="btn ghost warn" id="btn-skip-single">Skip</button>' : ''}
+          ${t.id && t.skipped ? '<button type="button" class="btn primary ghost" id="btn-unskip-single">Restore to Active</button>' : ''}
+          <span class="spacer"></span>
+          <button type="button" class="btn" data-close>Cancel</button>
+          <button class="btn primary" type="submit">${t.id ? 'Save changes' : 'Add'}</button>
+        </div>
       </form>`;
   }
 
@@ -166,12 +173,33 @@ const Capture = (() => {
   function edit(id) {
     const t = Store.state.txns.find((x) => x.id === id);
     if (!t) return;
-    App.modal(`<div class="modal-head"><h2>Edit transaction</h2><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+    App.modal(`<div class="modal-head"><h2>${t.skipped ? 'Skipped transaction' : 'Edit transaction'}</h2><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+      ${t.skipped ? `<div class="notice warn" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:8px;">
+        <div><b>⊘ This transaction is skipped</b><div class="small muted">Reason: ${U.esc(t.skipReason || 'Excluded from tracking')}</div></div>
+        <button type="button" class="btn sm primary" id="btn-unskip-top">Restore to Active</button>
+      </div>` : ''}
       ${txnForm(t)}
       ${t.docIds.length ? `<div class="linked-docs"><h4>Attached documents</h4>${t.docIds.map((d) => { const doc = Store.state.docs.find((x) => x.id === d); return doc ? `<button class="chip" data-doc="${d}">📎 ${U.esc(doc.name)}</button>` : ''; }).join('')}</div>` : ''}
       ${t.raw ? '' : ''}<p class="muted small">Added via ${U.esc(t.source)}.</p>`);
-    bindTxnForm(U.$('.modal'), (data) => { Store.updateTxn(id, data); U.toast('Updated', 'success'); App.closeModal(); });
+    bindTxnForm(U.$('.modal'), (data) => { Store.updateTxn(id, data); U.toast('Updated', 'success'); App.closeModal(); App.route(); });
     U.$('[data-delete]')?.addEventListener('click', () => { Store.deleteTxns([id]); App.closeModal(); App.undoToast([t]); });
+    const restoreActive = () => {
+      Store.updateTxn(id, { skipped: false, skipReason: '' });
+      U.toast('Restored to active', 'success');
+      App.closeModal();
+      App.route();
+    };
+    U.$('#btn-unskip-single')?.addEventListener('click', restoreActive);
+    U.$('#btn-unskip-top')?.addEventListener('click', restoreActive);
+    U.$('#btn-skip-single')?.addEventListener('click', () => {
+      const reason = prompt('Reason for skipping:', t.skipReason || 'Excluded by user');
+      if (reason !== null) {
+        Store.updateTxn(id, { skipped: true, skipReason: reason || 'Excluded by user' });
+        U.toast('Marked as skipped', 'info');
+        App.closeModal();
+        App.route();
+      }
+    });
     U.$$('[data-doc]').forEach((b) => b.addEventListener('click', () => Views.openDoc(b.dataset.doc)));
   }
 
